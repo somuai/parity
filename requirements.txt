@@ -1,0 +1,9 @@
+pydantic>=2.6
+requests>=2.31
+python-dotenv>=1.0
+sentence-transformers>=2.6   # Tier 2 semantic signal (Phase 3)
+groq>=0.11                   # Tier 2 LLM adjudicator (Phase 3) - free tier, no card required
+fastapi>=0.110                # hosted app backend (Phase 4)
+uvicorn[standard]>=0.29       # ASGI server for FastAPI
+pandas>=2.2
+pytest>=8.0

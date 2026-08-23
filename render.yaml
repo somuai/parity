@@ -1,0 +1,34 @@
+# Render blueprint - https://render.com/docs/blueprint-spec
+# One free web service: FastAPI serves both the API and the built React
+# frontend as static files, so this is the only Render service Parity
+# needs - no second service, no CORS to configure.
+#
+# Deploy: push this repo to GitHub, then in the Render dashboard choose
+# New > Blueprint and point it at the repo. Render reads this file and
+# provisions the service automatically.
+#
+# Free tier reality, stated here so it isn't a surprise later: this
+# service sleeps after 15 minutes with no traffic and takes 30-60s to wake
+# on the next request. Say this in the README/pitch rather than letting a
+# judge assume a slow first load means something's broken.
+
+services:
+  - type: web
+    name: parity
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt && cd frontend && npm install && npm run build"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: RAZORPAY_TEST_KEY_ID
+        sync: false   # set manually in the Render dashboard - never commit real keys
+      - key: RAZORPAY_TEST_KEY_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: LLM_CALL_BUDGET_PER_RUN
+        value: "500"
+      - key: TOKEN_BUDGET_PER_RUN
+        value: "200000"

@@ -1,0 +1,74 @@
+# .codex/rules/project.rules
+#
+# Real syntax, checked against OpenAI's Codex rules docs (developers.openai.com/codex/rules) --
+# two corrections from the first draft:
+#
+# 1. decision only accepts "allow", "prompt", or "forbidden" -- NOT "deny".
+#    ("deny" throughout the earlier version of this file was invented, not real.)
+# 2. When more than one rule matches the same command, Codex applies the
+#    MOST RESTRICTIVE one (forbidden > prompt > allow) -- rules are not
+#    first-match. This matters here: a specific "allow" for one exact curl
+#    invocation plus a general "forbidden" for all curl would mean the
+#    general forbidden rule wins even on the one command meant to be
+#    allowed. So below, there is no blanket curl rule at all -- only the
+#    one exact, narrowly-matched command is allow-listed; anything else
+#    naturally falls through to normal approval_policy prompting, since no
+#    rule matches it.
+#
+# This file's discovery at the project level (vs. the well-documented
+# ~/.codex/rules/) hasn't been independently confirmed here -- verify it's
+# actually being read with:
+#   codex execpolicy check --pretty --rules .codex/rules/project.rules \
+#     -- curl https://api.groq.com/openai/v1/models
+# before relying on it during a build session.
+
+prefix_rule(
+    pattern = ["python3", "-m", "pytest"],
+    decision = "allow",
+    justification = "Test runs are safe and expected constantly during build",
+)
+
+prefix_rule(
+    pattern = ["python3", "-m", "data.generators"],
+    decision = "prompt",
+    justification = "Anything touching data/ risks the frozen held-out set -- always confirm",
+)
+
+prefix_rule(
+    pattern = ["make"],
+    decision = "prompt",
+    justification = "Makefile targets can trigger data generation -- confirm which target",
+)
+
+# Narrow allow-list: only this exact command, not "curl" generally.
+# match/not_match are inline unit tests Codex validates when it loads this
+# file -- if the pattern stops matching real usage, this fails loudly at
+# load time instead of silently.
+prefix_rule(
+    pattern = ["curl", "https://api.groq.com/openai/v1/models"],
+    decision = "allow",
+    justification = "Phase 0 and Phase 3 both verify live model availability this way before building against a model",
+    match = [
+        "curl https://api.groq.com/openai/v1/models",
+    ],
+    not_match = [
+        # Any other curl target still falls through to normal approval_policy
+        # prompting -- there is deliberately no general "curl" rule here.
+        "curl https://api.razorpay.com/v1/settlements/recon/combined",
+    ],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Never push without explicit confirmation",
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf", "data/holdout"],
+    decision = "forbidden",
+    justification = "The frozen held-out set must never be deleted or regenerated once hashed. Use `rg` or inspect the directory manually instead of removing it to troubleshoot.",
+    match = [
+        "rm -rf data/holdout",
+    ],
+)

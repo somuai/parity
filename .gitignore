@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+data/holdout/*.csv
+data/holdout/*.json
+data/holdout/HOLDOUT_HASH.txt
+!data/holdout/.gitkeep
+node_modules/
+frontend/dist/
+results/
