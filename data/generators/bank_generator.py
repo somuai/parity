@@ -4,14 +4,10 @@ to the shared truth set (data/holdout/truth.json — run truth_source.py first).
 
 Only records where PERTURB_SIDE == "bank" get modified from ground truth;
 everything else passes through clean, so Tier 1 should catch it.
-
-TODO (Codex Data Engineer agent, Phase 1): ONE_TO_MANY is currently
-approximated as a single row with a flag rather than an actual N-way split
-across multiple settlement dates — implement the real split so Tier 2's
-one-to-many matching logic has something genuine to solve.
 """
 import csv
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from decimal import Decimal
 
@@ -20,12 +16,62 @@ from data.generators.exception_taxonomy import (
     apply_timing_lag,
     apply_fee_deduction,
     apply_fx_rounding,
+    settlement_cycle_offset,
 )
 
 HOLDOUT_DIR = Path("data/holdout")
+CENT = Decimal("0.01")
+
+
+def _split_one_to_many(transaction: dict) -> list[dict]:
+    """Create deterministic, cent-exact settlement parts for one invoice."""
+    true_id = transaction["true_id"]
+    part_count = 2 + (sum(true_id.encode("utf-8")) % 2)
+    amount = Decimal(transaction["amount"])
+
+    if amount != amount.quantize(CENT):
+        raise ValueError(
+            f"ONE_TO_MANY amount for {true_id} is not cent-exact: {amount}"
+        )
+
+    total_cents = int(amount / CENT)
+    if total_cents < part_count:
+        raise ValueError(
+            f"ONE_TO_MANY amount for {true_id} has {total_cents} cents, "
+            f"too little for {part_count} positive parts"
+        )
+
+    cents_per_part, remainder = divmod(total_cents, part_count)
+    origin_date = date.fromisoformat(transaction["txn_date"])
+    cycle_days = settlement_cycle_offset(transaction["is_international"])
+    rows = []
+
+    for part_index in range(1, part_count + 1):
+        part_cents = cents_per_part + (1 if part_index <= remainder else 0)
+        part_amount = (Decimal(part_cents) * CENT).quantize(CENT)
+        settlement_date = origin_date + timedelta(days=cycle_days * part_index)
+        rows.append({
+            "record_id": f"bank_{true_id}_part_{part_index}",
+            "reference": transaction["reference"],
+            "amount": str(part_amount),
+            "txn_date": settlement_date.isoformat(),
+            "description": (
+                f"{transaction['counterparty']} settlement "
+                f"part {part_index}/{part_count}"
+            ),
+            "counterparty": transaction["counterparty"],
+        })
+
+    return rows
 
 
 def generate():
+    hash_path = HOLDOUT_DIR / "HOLDOUT_HASH.txt"
+    if hash_path.exists():
+        raise RuntimeError(
+            f"Refusing to regenerate frozen holdout: {hash_path} already exists"
+        )
+
     with open(HOLDOUT_DIR / "truth.json") as f:
         truth = json.load(f)
 
@@ -48,9 +94,8 @@ def generate():
             elif exc == ExceptionType.FX_ROUNDING:
                 amount = apply_fx_rounding(amount)
             elif exc == ExceptionType.ONE_TO_MANY:
-                # Approximation — see module TODO. Marks the row so eval can
-                # at least identify it as a known-incomplete case for now.
-                pass
+                rows.extend(_split_one_to_many(t))
+                continue
 
         rows.append({
             "record_id": f"bank_{t['true_id']}",

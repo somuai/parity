@@ -49,7 +49,17 @@ PERTURB_SIDE: dict[ExceptionType, str] = {
 
 
 def generate_truth(n: int = 300) -> list[dict]:
-    assert n == sum(TARGET_DISTRIBUTION.values()), "n must match exception_taxonomy distribution"
+    hash_path = OUT_DIR / "HOLDOUT_HASH.txt"
+    if hash_path.exists():
+        raise RuntimeError(
+            f"Refusing to regenerate frozen holdout: {hash_path} already exists"
+        )
+
+    expected_total = sum(TARGET_DISTRIBUTION.values())
+    if n != expected_total:
+        raise ValueError(
+            f"Truth size mismatch: requested {n}, taxonomy requires {expected_total}"
+        )
 
     plan: list[ExceptionType] = []
     for exc_type, count in TARGET_DISTRIBUTION.items():
@@ -59,8 +69,16 @@ def generate_truth(n: int = 300) -> list[dict]:
     truth = []
     for idx, exc_type in enumerate(plan):
         txn_date = date(2026, 7, 1) + timedelta(days=random.randint(0, 45))
+        true_id = f"txn_{idx:04d}"
+        is_grouped = exc_type in {
+            ExceptionType.ONE_TO_MANY,
+            ExceptionType.MANY_TO_ONE,
+        }
         truth.append({
-            "true_id": f"txn_{idx:04d}",
+            "true_id": true_id,
+            # Ground-truth-only group label. Source CSVs deliberately omit it
+            # so the matcher cannot use the answer as an input signal.
+            "group_id": f"group_{true_id}" if is_grouped else None,
             "reference": f"pay_{uuid.uuid4().hex[:14]}",
             "amount": str(Decimal(random.randint(500, 250000)) / 100),
             "txn_date": txn_date.isoformat(),

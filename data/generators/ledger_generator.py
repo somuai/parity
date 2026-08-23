@@ -1,23 +1,55 @@
 """
 Generates data/holdout/internal_ledger.csv — the mirror of bank_generator.py,
 applying ledger-side perturbations to the same shared truth set.
-
-TODO (Codex Data Engineer agent, Phase 1): MANY_TO_ONE is approximated the
-same way ONE_TO_MANY is on the bank side — implement the real N-invoices-to-
-one-settlement merge so Tier 2 has a genuine grouping problem to solve.
 """
 import csv
+import hashlib
 import json
-from pathlib import Path
 from decimal import Decimal
+from pathlib import Path
 
 from config.schema import ExceptionType
 from data.generators.exception_taxonomy import corrupt_reference
 
 HOLDOUT_DIR = Path("data/holdout")
+CENT = Decimal("0.01")
+
+
+def _many_to_one_rows(truth_item: dict, amount: Decimal) -> list[dict]:
+    """Split one settlement truth item into deterministic ledger invoices."""
+    child_count = 2 + (hashlib.sha256(truth_item["true_id"].encode()).digest()[0] % 2)
+    total_cents = int(amount / CENT)
+    if amount <= 0 or amount != amount.quantize(CENT) or total_cents < child_count:
+        raise ValueError(
+            f"MANY_TO_ONE amount for {truth_item['true_id']} must be a positive, "
+            f"cent-exact value of at least {child_count} cents; got {amount}"
+        )
+
+    base_cents, extra_cents = divmod(total_cents, child_count)
+    rows = []
+    for child_index in range(child_count):
+        child_cents = base_cents + (1 if child_index < extra_cents else 0)
+        rows.append({
+            "record_id": f"ledger_{truth_item['true_id']}_invoice_{child_index + 1:02d}",
+            "reference": f"{truth_item['reference']}_invoice_{child_index + 1:02d}",
+            "amount": str(Decimal(child_cents) * CENT),
+            "txn_date": truth_item["txn_date"],
+            "description": (
+                f"Invoice {child_index + 1}/{child_count} - "
+                f"{truth_item['counterparty']}"
+            ),
+            "counterparty": truth_item["counterparty"],
+        })
+    return rows
 
 
 def generate():
+    hash_path = HOLDOUT_DIR / "HOLDOUT_HASH.txt"
+    if hash_path.exists():
+        raise RuntimeError(
+            f"Refusing to regenerate frozen holdout: {hash_path} already exists"
+        )
+
     with open(HOLDOUT_DIR / "truth.json") as f:
         truth = json.load(f)
 
@@ -39,8 +71,8 @@ def generate():
             elif exc == ExceptionType.DUPLICATE_ENTRY:
                 emit_duplicate = True
             elif exc == ExceptionType.MANY_TO_ONE:
-                # Approximation — see module TODO.
-                pass
+                rows.extend(_many_to_one_rows(t, amount))
+                continue
 
         row = {
             "record_id": f"ledger_{t['true_id']}",
