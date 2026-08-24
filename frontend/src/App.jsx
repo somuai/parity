@@ -159,6 +159,116 @@ function SummaryStrip({ summary }) {
   );
 }
 
+function RazorpayTestModeFeed({ feed, loading, error, onRefresh }) {
+  const records = Array.isArray(feed?.records) ? feed.records : [];
+  const rows = Number(feed?.validated_rows ?? 0);
+  const period = feed ? `${feed.year}-${String(feed.month).padStart(2, "0")}` : "current month";
+
+  return (
+    <Card variant="secondary">
+      <CardBody>
+        <Box display="flex" flexWrap="wrap" justifyContent="space-between" gap="spacing.5">
+          <Box flex="1 1 auto">
+            <Box display="flex" flexWrap="wrap" alignItems="center" gap="spacing.3">
+              <Heading size="medium">Razorpay Test Mode feed</Heading>
+              <Badge color="information" size="small">
+                Live, unlabeled source
+              </Badge>
+            </Box>
+            <Text marginTop="spacing.2" size="small" color="surface.text.gray.muted">
+              Authenticated Settlement Recon data from this merchant’s Test Mode account. It is
+              shown separately and never changes the frozen bank-versus-ledger match rate,
+              precision, recall, or exception totals.
+            </Text>
+          </Box>
+          <Button onClick={onRefresh} isLoading={loading} isDisabled={loading}>
+            Refresh feed
+          </Button>
+        </Box>
+
+        {error ? (
+          <Alert
+            marginTop="spacing.6"
+            title="Razorpay Test Mode feed unavailable"
+            description={error}
+            color="negative"
+            isDismissible={false}
+            isFullWidth
+          />
+        ) : null}
+
+        {loading && !feed ? (
+          <Box display="flex" justifyContent="center" paddingY="spacing.7">
+            <Spinner accessibilityLabel="Loading Razorpay Test Mode feed" label="Loading live feed" />
+          </Box>
+        ) : null}
+
+        {feed && !loading ? (
+          <Box marginTop="spacing.6">
+            <Box display="flex" flexWrap="wrap" gap="spacing.5">
+              <Box
+                width={{ base: "100%", m: "31%" }}
+                padding="spacing.5"
+                borderRadius="medium"
+                backgroundColor="feedback.background.information.subtle"
+              >
+                <Text size="xsmall" color="surface.text.gray.muted">
+                  Validated settlement rows
+                </Text>
+                <Display size="small" marginTop="spacing.2" color="feedback.text.information.intense">
+                  {numberFormatter.format(rows)}
+                </Display>
+                <Text marginTop="spacing.2" size="small">
+                  {period}
+                </Text>
+              </Box>
+              <Box width={{ base: "100%", m: "65%" }} padding="spacing.5" borderRadius="medium" backgroundColor="surface.background.gray.subtle">
+                <Text size="small" weight="semibold">
+                  Scope boundary
+                </Text>
+                <Text marginTop="spacing.2" size="small" color="surface.text.gray.muted">
+                  {rows
+                    ? `Showing a safe sample of up to ${numberFormatter.format(feed.sample_limit ?? records.length)} normalized rows.`
+                    : feed.empty_message}
+                </Text>
+              </Box>
+            </Box>
+
+            {records.length ? (
+              <Box marginTop="spacing.6" display="flex" flexDirection="column" gap="spacing.3">
+                {records.map((record) => (
+                  <Box
+                    key={record.id}
+                    display="flex"
+                    flexWrap="wrap"
+                    justifyContent="space-between"
+                    gap="spacing.3"
+                    padding="spacing.4"
+                    borderRadius="medium"
+                    backgroundColor="surface.background.gray.subtle"
+                  >
+                    <Box>
+                      <Text size="small" weight="semibold" wordBreak="break-all">
+                        {record.reference || record.id}
+                      </Text>
+                      <Text marginTop="spacing.1" size="xsmall" color="surface.text.gray.muted">
+                        {`${record.type} · ${record.txn_date} · ${record.description || "No description"}`}
+                      </Text>
+                    </Box>
+                    <Text size="small" weight="semibold">
+                      {currencyFormatter.format(Number(record.amount_inr ?? 0))}
+                    </Text>
+                  </Box>
+                ))}
+              </Box>
+            ) : null}
+          </Box>
+        ) : null}
+      </CardBody>
+    </Card>
+  );
+}
+
 function ConfidenceScatter({ records, selectedId, onSelect }) {
   const counts = useMemo(
     () =>
@@ -587,6 +697,9 @@ export default function App() {
   const [rerunResult, setRerunResult] = useState(null);
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunError, setRerunError] = useState("");
+  const [razorpayFeed, setRazorpayFeed] = useState(null);
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
+  const [razorpayError, setRazorpayError] = useState("");
 
   async function loadDashboard() {
     setLoading(true);
@@ -613,6 +726,29 @@ export default function App() {
 
   useEffect(() => {
     loadDashboard();
+  }, []);
+
+  async function loadRazorpayFeed(signal) {
+    setRazorpayLoading(true);
+    setRazorpayError("");
+    try {
+      const payload = await requestJson("/api/razorpay/recon", undefined, signal);
+      setRazorpayFeed(payload);
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        setRazorpayError(
+          error instanceof Error ? error.message : "Unable to load the Razorpay Test Mode feed.",
+        );
+      }
+    } finally {
+      if (!signal?.aborted) setRazorpayLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadRazorpayFeed(controller.signal);
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -726,6 +862,19 @@ export default function App() {
 
       <Box marginTop="spacing.7">
         <SummaryStrip summary={summary} />
+      </Box>
+
+      <Box as="section" marginTop="spacing.9">
+        <SectionHeading
+          title="Live Razorpay connection"
+          description="A real read-only Test Mode integration, shown separately from the frozen evaluation."
+        />
+        <RazorpayTestModeFeed
+          feed={razorpayFeed}
+          loading={razorpayLoading}
+          error={razorpayError}
+          onRefresh={() => loadRazorpayFeed()}
+        />
       </Box>
 
       <Box as="section" marginTop="spacing.9">
