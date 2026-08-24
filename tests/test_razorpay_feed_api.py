@@ -28,6 +28,10 @@ def test_razorpay_recon_is_a_sampled_unlabeled_source(
             assert (year, month) == (2026, 8)
             return [{"entity_id": f"txn_{index}", "type": "payment"} for index in range(6)]
 
+        def fetch_recent_payments(self, count: int) -> list[dict]:
+            assert count == 5
+            return [{"id": "pay_test", "amount": 100, "currency": "INR", "status": "captured", "created_at": 1724457600}]
+
         @staticmethod
         def to_canonical(raw: dict) -> CanonicalRecord:
             return CanonicalRecord(
@@ -52,6 +56,7 @@ def test_razorpay_recon_is_a_sampled_unlabeled_source(
     assert body["sample_limit"] == 5
     assert len(body["records"]) == 5
     assert body["records"][0]["amount_inr"] == "125.00"
+    assert body["recent_payment_activity"] == [{"id": "pay_test", "amount_inr": "1.0", "status": "captured", "created_at": "2024-08-24T00:00:00+00:00"}]
 
 
 def test_razorpay_recon_hides_credentials_when_unavailable(

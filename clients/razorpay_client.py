@@ -137,6 +137,45 @@ class RazorpayReconClient:
             skip += count
         return collected
 
+    def fetch_recent_payments(self, count: int = 5) -> list[dict[str, Any]]:
+        """Return a small, validated Test Mode payment-activity sample.
+
+        Payment activity is deliberately distinct from settlement reconciliation:
+        a captured Test Mode payment is useful connection evidence but is not a
+        settled bank row and must never enter the held-out evaluator.
+        """
+        if not 1 <= count <= MAX_PAGE_SIZE:
+            raise ValueError(f"count must be between 1 and {MAX_PAGE_SIZE}")
+        response = self.session.get(
+            f"{RAZORPAY_BASE_URL}/payments",
+            params={"count": count},
+            auth=(self.key_id, self.key_secret),
+            timeout=15,
+        )
+        response.raise_for_status()
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise RazorpayPayloadError("Razorpay returned invalid payment JSON") from exc
+        if not isinstance(body, Mapping) or not isinstance(body.get("items"), list):
+            raise RazorpayPayloadError("Razorpay payment response must contain an items array")
+        safe: list[dict[str, Any]] = []
+        for raw in body["items"]:
+            if not isinstance(raw, Mapping):
+                raise RazorpayPayloadError("Every Razorpay payment item must be an object")
+            item = dict(raw)
+            _required_nonempty_id(item)
+            _paise(item, "amount")
+            if str(item.get("currency") or "").upper() != "INR":
+                raise RazorpayPayloadError("Unsupported Razorpay payment currency")
+            if not isinstance(item.get("status"), str) or not item["status"].strip():
+                raise RazorpayPayloadError("Razorpay payment is missing a status")
+            created_at = item.get("created_at")
+            if isinstance(created_at, bool) or not isinstance(created_at, int) or created_at <= 0:
+                raise RazorpayPayloadError("Razorpay payment is missing a valid created_at")
+            safe.append(item)
+        return safe
+
     @staticmethod
     def to_canonical(raw: Mapping[str, Any]) -> CanonicalRecord:
         """Map one validated item into signed INR and settlement-date semantics."""

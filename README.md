@@ -10,11 +10,18 @@ with an internal ledger, finds matches it can substantiate, and flags the
 rest in a reason-coded exception book. It never moves money or acts on a
 merchant's behalf.
 
+The graded held-out evaluation is synthetic bank-versus-ledger only. The app
+also fetches the merchant's Razorpay Test Mode Settlement Recon feed as a
+separate, unlabeled live-integration panel. It is never included in the
+graded precision/recall result.
+
 ## Verified result
 
-These are the results of the fixture-free live evaluation captured on
-2026-08-24. It used the real MiniLM sentence-transformers encoder and live
-Groq adjudication over the immutable held-out set.
+These are the single canonical metrics in
+[`results/current_run.json`](results/current_run.json), captured by a
+fixture-free live evaluation on 2026-08-24. It used the real MiniLM
+sentence-transformers encoder and live Groq adjudication over the immutable
+held-out set.
 
 | Metric | Fresh live result |
 |---|---:|
@@ -32,10 +39,9 @@ Groq adjudication over the immutable held-out set.
 
 The accounting is intentionally explicit: 263 truth transactions are
 matched-only and 37 appear in the exception book, so those exclusive sets
-sum to 300. Nine duplicate cases appear in both views because the valid
-bank/ledger pair is matched while the extra duplicate source row is flagged.
-The exception report therefore contains 38 source-level entries representing
-37 truth transactions.
+sum to 300. Nine duplicate cases appear in both views because the valid pair
+is matched while the extra duplicate source row is flagged. The exception
+report therefore contains 38 source-level entries representing 37 truths.
 
 The exception book keeps two money figures separate:
 
@@ -45,9 +51,8 @@ The exception book keeps two money figures separate:
 | Review-only, not claimed as leakage | 25 | **₹5,356.66** |
 
 The live run encountered Groq free-tier pressure: 140 rate-limit responses,
-61 retry attempts, one retried transport error, and 13 candidates ultimately
-returned to the exception book rather than guessed. The reported precision
-remained 100%.
+61 retries, one retried transport error, and 13 candidates returned to the
+exception book rather than guessed. Precision remained 100%.
 
 The frozen hash is
 `2aacac85b9d15cc186c63b2ceb1557767c99b3dfacd9931e4655a3fd7f9d8154`.
@@ -110,6 +115,28 @@ minute-by-minute availability.
 amount direction, and empty-account behavior for Razorpay's test-mode
 Settlement Recon API. The Razorpay feed is not silently included in the
 graded precision/recall claim: the labeled evaluation is bank-versus-ledger.
+
+## Live Razorpay Test Mode evidence
+
+`RAZORPAY_TEST_KEY_ID` and `RAZORPAY_TEST_KEY_SECRET` are used by the strict
+Razorpay client for two read-only endpoints: Settlement Recon and recent
+payment activity. On 2026-08-24 we created and captured a ₹1.00 Test Mode
+payment; the payment API returned `paid`, while Settlement Recon still returned
+zero rows. That is an honest Test Mode limitation: captured payments do not
+necessarily create settlement rows. The app now labels those two facts
+separately, and neither is included in frozen precision/recall.
+
+## What broke at 2am, and how Parity handled it
+
+The failure mode was Groq free-tier capacity during the live held-out run:
+140 rate-limit responses and one transport failure. The dangerous shortcut
+would have been to accept plausible candidates without an adjudicator. Parity
+instead retried with backoff, checked both LLM budgets before every call, and
+returned 13 candidates to the reason-coded exception book when evidence could
+not be completed. The result preserved 100% precision and ₹0 false-positive
+cost. The hosted **Re-run held-out batch** control then replays the immutable
+canonical artifact without new LLM calls and verifies the complete outcome
+digest, so a judge can reproduce the published number even when Groq is busy.
 
 ## Status and hardening disposition
 

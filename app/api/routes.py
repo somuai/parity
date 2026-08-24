@@ -52,6 +52,7 @@ def razorpay_recon(
     try:
         client = RazorpayReconClient()
         raw_items = client.fetch_settlement_recon(selected_year, selected_month)
+        payment_items = client.fetch_recent_payments(PUBLIC_RECON_SAMPLE_LIMIT)
         records = [
             {
                 "id": record.record_id,
@@ -96,10 +97,22 @@ def razorpay_recon(
         # history from the hosted page.
         "sample_limit": PUBLIC_RECON_SAMPLE_LIMIT,
         "records": records[:PUBLIC_RECON_SAMPLE_LIMIT],
+        "recent_payment_activity": [
+            {
+                "id": str(raw.get("id")),
+                "amount_inr": str(raw["amount"] / 100),
+                "status": str(raw["status"]),
+                "created_at": datetime.fromtimestamp(
+                    int(raw["created_at"]), tz=timezone.utc
+                ).isoformat(),
+            }
+            for raw in payment_items[:PUBLIC_RECON_SAMPLE_LIMIT]
+        ],
         "empty_message": (
             "Connected, but no settled Test Mode transactions were returned for "
-            f"{selected_year}-{selected_month:02d}. Create and capture a Test "
-            "Mode payment, then refresh this read-only feed."
+            f"{selected_year}-{selected_month:02d}. Test Mode payments can be "
+            "captured without ever producing settlement Recon rows; recent payment "
+            "activity is shown separately below."
             if not records
             else None
         ),

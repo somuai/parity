@@ -161,6 +161,7 @@ function SummaryStrip({ summary }) {
 
 function RazorpayTestModeFeed({ feed, loading, error, onRefresh }) {
   const records = Array.isArray(feed?.records) ? feed.records : [];
+  const payments = Array.isArray(feed?.recent_payment_activity) ? feed.recent_payment_activity : [];
   const rows = Number(feed?.validated_rows ?? 0);
   const period = feed ? `${feed.year}-${String(feed.month).padStart(2, "0")}` : "current month";
 
@@ -262,6 +263,18 @@ function RazorpayTestModeFeed({ feed, loading, error, onRefresh }) {
                 ))}
               </Box>
             ) : null}
+            <Box marginTop="spacing.6">
+              <Text size="small" weight="semibold">Recent Test Mode payment activity</Text>
+              <Text marginTop="spacing.1" size="xsmall" color="surface.text.gray.muted">
+                Captured payment activity proves the authenticated Test Mode connection; it is not a settlement row and is never scored as reconciliation evidence.
+              </Text>
+              {payments.length ? payments.map((payment) => (
+                <Box key={payment.id} marginTop="spacing.3" display="flex" justifyContent="space-between" gap="spacing.3" padding="spacing.4" borderRadius="medium" backgroundColor="feedback.background.positive.subtle">
+                  <Text size="small" wordBreak="break-all">{payment.id} · {payment.status}</Text>
+                  <Text size="small" weight="semibold">{currencyFormatter.format(Number(payment.amount_inr ?? 0))}</Text>
+                </Box>
+              )) : <Text marginTop="spacing.3" size="small" color="surface.text.gray.muted">No recent Test Mode payment activity was returned.</Text>}
+            </Box>
           </Box>
         ) : null}
       </CardBody>
