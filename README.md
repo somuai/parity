@@ -17,9 +17,9 @@ Full architecture, data model, and evaluation methodology: see
 |---|---|---|
 | 0 — Setup & API confirmation | Scaffolded — run `make confirm-api` with your own test-mode keys | `docs/codex_prompts/00_phase0_setup.md` |
 | 1 — Data layer | Truth source + bank/ledger generators working; one-to-many/many-to-one grouping still approximated (TODOs in `data/generators/`) | `01_data_engineer_agent.md` |
-| 2 — Tier 1 deterministic matcher | Not started | `02_tier1_matcher_agent.md` |
-| 3 — Tier 2 reasoning matcher | Not started | `03_tier2_reasoning_agent.md` |
-| 4 — Audit trail + hosted app + observability | Scaffolded (FastAPI + Blade frontend skeleton wired end to end, real data not yet flowing) | `04_audit_observability_agent.md` |
+| 2 — Tier 1 deterministic matcher | Complete — 219/300 deterministic matches, zero false positives | `02_tier1_matcher_agent.md` |
+| 3 — Tier 2 reasoning matcher | Complete — 97.33% cumulative live match rate, 100% precision | `03_tier2_reasoning_agent.md` |
+| 4 — Audit trail + hosted app + observability | Implemented locally; Render dashboard connection pending | `04_audit_observability_agent.md` |
 | 5 — Hardening review | Not started | `05_hardening_review_agent.md` |
 | 6 — Fixes, docs & repro | Not started | `06_docs_pitch_agent.md` |
 
@@ -45,10 +45,10 @@ service after 15 minutes with no traffic and takes 30-60 seconds to wake on
 the next visit. That's expected, not a bug — worth saying in the pitch
 video too, so nobody assumes the link is broken.
 
-Deployment steps live in Phase 4's Codex prompt
-(`docs/codex_prompts/04_audit_observability_agent.md`) since standing the
-app up depends on real Tier 1/2 output existing first. Live URL will be
-added here once deployed.
+**Live URL:** pending the one-time GitHub repository and Render Blueprint
+connection. The deployment definition is ready in `render.yaml`; this line
+must be replaced with the verified `onrender.com` URL after the dashboard
+deploy succeeds.
 
 ## Why Groq, not Anthropic, for the Tier 2 adjudicator
 
@@ -64,8 +64,7 @@ credit-limited), so that's what `engine/adjudicator.py` calls. See
 cp .env.example .env        # fill in your Razorpay test-mode + Groq keys
 make setup
 make confirm-api            # Phase 0 gate — must pass before continuing
-make gen-data                # Phase 1 — generates the held-out set
-make demo                    # full pipeline (once Phase 2+ land)
+make demo                    # verify hash, run real pipeline, write audit/results
 
 # Once Phase 4 lands, run the app locally in two terminals:
 make run-backend             # FastAPI on :8000

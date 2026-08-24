@@ -17,17 +17,23 @@ services:
     name: parity
     runtime: python
     plan: free
-    buildCommand: "pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt && cd frontend && npm install && npm run build"
+    buildCommand: "python -m pip install torch --index-url https://download.pytorch.org/whl/cpu && python -m pip install -r requirements.txt && cd frontend && npm ci && npm run build"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.11"
       - key: RAZORPAY_TEST_KEY_ID
         sync: false   # set manually in the Render dashboard - never commit real keys
       - key: RAZORPAY_TEST_KEY_SECRET
         sync: false
       - key: GROQ_API_KEY
         sync: false
-      - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile
+      - key: GROQ_MODEL_FAST
+        value: openai/gpt-oss-20b
+      - key: GROQ_MODEL_REASONING
+        value: openai/gpt-oss-120b
       - key: LLM_CALL_BUDGET_PER_RUN
         value: "500"
       - key: TOKEN_BUDGET_PER_RUN

@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "total_entries": 22,
+  "leakage": {
+    "entry_count": 14,
+    "total_amount_at_risk_inr": "13088.24"
+  },
+  "non_leakage": {
+    "entry_count": 8,
+    "total_amount_at_risk_inr": "5356.66"
+  },
+  "groups": {
+    "duplicate_entry": {
+      "entry_count": 10,
+      "leakage_entry_count": 10,
+      "non_leakage_entry_count": 0,
+      "entries": [
+        {
+          "record_ids": [
+            "ledger_txn_0005_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0005_dup duplicates ledger_txn_0005: reference='pay_3c6dcd0eac2141', amount=₹215, txn_date=2026-08-02, counterparty='Customer_5'.",
+          "estimated_amount_at_risk_inr": "215",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0023_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0023_dup duplicates ledger_txn_0023: reference='pay_6d90ad06c3ac4b', amount=₹1807.23, txn_date=2026-07-14, counterparty='Subscriber_23'.",
+          "estimated_amount_at_risk_inr": "1807.23",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0036_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0036_dup duplicates ledger_txn_0036: reference='pay_ff1ae2e793974d', amount=₹2431.83, txn_date=2026-07-10, counterparty='Customer_36'.",
+          "estimated_amount_at_risk_inr": "2431.83",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0040_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0040_dup duplicates ledger_txn_0040: reference='pay_e47c54b02e854c', amount=₹1007.81, txn_date=2026-07-07, counterparty='Customer_40'.",
+          "estimated_amount_at_risk_inr": "1007.81",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0063_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0063_dup duplicates ledger_txn_0063: reference='pay_5fd43fb817814b', amount=₹2085.72, txn_date=2026-07-31, counterparty='Subscriber_63'.",
+          "estimated_amount_at_risk_inr": "2085.72",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0134_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0134_dup duplicates ledger_txn_0134: reference='pay_c39e96c2c8bc45', amount=₹1065.11, txn_date=2026-07-15, counterparty='Subscriber_134'.",
+          "estimated_amount_at_risk_inr": "1065.11",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0140_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0140_dup duplicates ledger_txn_0140: reference='pay_0c2f13d715a047', amount=₹490.35, txn_date=2026-08-14, counterparty='Customer_140'.",
+          "estimated_amount_at_risk_inr": "490.35",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0168_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0168_dup duplicates ledger_txn_0168: reference='pay_cf4b5bf646b945', amount=₹161.33, txn_date=2026-07-05, counterparty='Customer_168'.",
+          "estimated_amount_at_risk_inr": "161.33",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0186_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0186_dup duplicates ledger_txn_0186: reference='pay_9284ade869394f', amount=₹1729.01, txn_date=2026-07-01, counterparty='Subscriber_186'.",
+          "estimated_amount_at_risk_inr": "1729.01",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0284_dup"
+          ],
+          "reason_code": "duplicate_entry",
+          "reason_detail": "Ledger record ledger_txn_0284_dup duplicates ledger_txn_0284: reference='pay_85825cf79b8f4d', amount=₹302.92, txn_date=2026-08-03, counterparty='Subscriber_284'.",
+          "estimated_amount_at_risk_inr": "302.92",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "duplicate_entry has a supportable amount-at-risk estimate."
+        }
+      ]
+    },
+    "fee_deduction": {
+      "entry_count": 4,
+      "leakage_entry_count": 0,
+      "non_leakage_entry_count": 4,
+      "entries": [
+        {
+          "record_ids": [
+            "bank_txn_0034",
+            "ledger_txn_0034"
+          ],
+          "reason_code": "fee_deduction",
+          "reason_detail": "records=['bank_txn_0034', 'ledger_txn_0034']; totals=₹1718.25/₹1753.32; absolute_amount_delta=₹35.07; amount_delta=0.0800 (inferred_fee); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7480; reference_similarity=1.0; partial_refund_plausible=False; refund_ratio=None; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=no, adjudicator_confidence=0.9000; fused_confidence=0.6000, band=low, route=exception. Records left=['bank_txn_0034'], right=['ledger_txn_0034']; Python totals ₹1718.25 vs ₹1753.32, delta=₹35.07 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=0.0800, embedding_similarity=0.7480, fee_plausible=1.0000, fee_rate=0.0200, fx_rounding_plausible=0.0000, partial_refund_plausible=0.0000, reference_similarity=1.0000, refund_ratio=0.0000, relative_amount_delta=0.0200, semantic=0.7480, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0034 (INR 1718.25) and right record ledger_txn_0034 (INR 1753.32) have an absolute sum delta of 35.07 INR, which exceeds the allowed tolerance of 1.00 INR (sums_match_within_tolerance=false). No deterministic plausibility signal (fee_plausible, fx_rounding_plausible, partial_refund_plausible) explains this discrepancy; fee_plausible is 1.0 but there are no fees recorded, and fx_rounding_plausible and partial_refund_plausible are 0.0. Although reference_similarity is perfect (1.0) and amount_delta is modest (0.08), the large monetary delta cannot be justified, so the records do not plausibly reconcile.",
+          "estimated_amount_at_risk_inr": null,
+          "amount_source": "unavailable",
+          "risk_classification": "non_leakage",
+          "classification_reason": "fee_deduction is review-only and is never classified as proven leakage."
+        },
+        {
+          "record_ids": [
+            "bank_txn_0102",
+            "ledger_txn_0102"
+          ],
+          "reason_code": "fee_deduction",
+          "reason_detail": "records=['bank_txn_0102', 'ledger_txn_0102']; totals=₹903.95/₹922.4; absolute_amount_delta=₹18.45; amount_delta=0.0800 (inferred_fee); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7583; reference_similarity=1.0; partial_refund_plausible=False; refund_ratio=None; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=no, adjudicator_confidence=0.9000; fused_confidence=0.6000, band=low, route=exception. Records left=['bank_txn_0102'], right=['ledger_txn_0102']; Python totals ₹903.95 vs ₹922.4, delta=₹18.45 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=0.0800, embedding_similarity=0.7583, fee_plausible=1.0000, fee_rate=0.0200, fx_rounding_plausible=0.0000, partial_refund_plausible=0.0000, reference_similarity=1.0000, refund_ratio=0.0000, relative_amount_delta=0.0200, semantic=0.7583, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0102 (amount INR 903.95) and right record ledger_txn_0102 (amount INR 922.40) have an absolute sum delta of 18.45 INR, which exceeds the sum tolerance of 1.00 INR (sums_match_within_tolerance=false). Although the reference_similarity is perfect (1.0) and timing_delta is 0, the amount_delta score is only 0.0800 and the fee_plausible signal is 1.0 but there are no fees recorded to explain the discrepancy. No FX rounding or partial‑refund signals are positive. The deterministic sum mismatch therefore outweighs the positive similarity signals, leading to a conclusion that the records do not plausibly reconcile.",
+          "estimated_amount_at_risk_inr": null,
+          "amount_source": "unavailable",
+          "risk_classification": "non_leakage",
+          "classification_reason": "fee_deduction is review-only and is never classified as proven leakage."
+        },
+        {
+          "record_ids": [
+            "bank_txn_0118",
+            "ledger_txn_0118"
+          ],
+          "reason_code": "fee_deduction",
+          "reason_detail": "records=['bank_txn_0118', 'ledger_txn_0118']; totals=₹276.03/₹281.66; absolute_amount_delta=₹5.63; amount_delta=0.0800 (inferred_fee); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7479; reference_similarity=1.0; partial_refund_plausible=False; refund_ratio=None; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=no, adjudicator_confidence=0.9000; fused_confidence=0.6000, band=low, route=exception. Records left=['bank_txn_0118'], right=['ledger_txn_0118']; Python totals ₹276.03 vs ₹281.66, delta=₹5.63 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=0.0800, embedding_similarity=0.7479, fee_plausible=1.0000, fee_rate=0.0200, fx_rounding_plausible=0.0000, partial_refund_plausible=0.0000, reference_similarity=1.0000, refund_ratio=0.0000, relative_amount_delta=0.0200, semantic=0.7479, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0118 (276.03 INR) and right record ledger_txn_0118 (281.66 INR) have an absolute sum delta of 5.63 INR, exceeding the sum tolerance of 1.00 INR (sums_match_within_tolerance false). No fee, FX rounding, or partial‑refund signals are present to explain the discrepancy. Although reference_similarity is 1.0 and amount_delta is modest (0.0800), the deterministic sum check fails, so the pair does not plausibly reconcile.",
+          "estimated_amount_at_risk_inr": null,
+          "amount_source": "unavailable",
+          "risk_classification": "non_leakage",
+          "classification_reason": "fee_deduction is review-only and is never classified as proven leakage."
+        },
+        {
+          "record_ids": [
+            "bank_txn_0290",
+            "ledger_txn_0290"
+          ],
+          "reason_code": "fee_deduction",
+          "reason_detail": "records=['bank_txn_0290', 'ledger_txn_0290']; totals=₹1767.49/₹1803.56; absolute_amount_delta=₹36.07; amount_delta=0.0800 (inferred_fee); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7655; reference_similarity=1.0; partial_refund_plausible=False; refund_ratio=None; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=no, adjudicator_confidence=0.9000; fused_confidence=0.6000, band=low, route=exception. Records left=['bank_txn_0290'], right=['ledger_txn_0290']; Python totals ₹1767.49 vs ₹1803.56, delta=₹36.07 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=0.0800, embedding_similarity=0.7655, fee_plausible=1.0000, fee_rate=0.0200, fx_rounding_plausible=0.0000, partial_refund_plausible=0.0000, reference_similarity=1.0000, refund_ratio=0.0000, relative_amount_delta=0.0200, semantic=0.7655, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0290 (INR 1767.49) and right record ledger_txn_0290 (INR 1803.56) have an absolute sum delta of 36.07 INR, far exceeding the sum tolerance of 1.00 INR (sums_match_within_tolerance=false). No compensating deterministic signals are present: fee_plausible=1.0 but no fees are recorded, fx_rounding_plausible=0.0, and partial_refund_plausible=0.0. Although reference_similarity=1.0 and amount_delta=0.0800 suggest some similarity, the large monetary mismatch cannot be explained, so the pair does not plausibly reconcile.",
+          "estimated_amount_at_risk_inr": null,
+          "amount_source": "unavailable",
+          "risk_classification": "non_leakage",
+          "classification_reason": "fee_deduction is review-only and is never classified as proven leakage."
+        }
+      ]
+    },
+    "orphan": {
+      "entry_count": 4,
+      "leakage_entry_count": 0,
+      "non_leakage_entry_count": 4,
+      "entries": [
+        {
+          "record_ids": [
+            "ledger_txn_0015"
+          ],
+          "reason_code": "orphan",
+          "reason_detail": "No candidate exists on the bank side for ledger_txn_0015(reference='pay_d97a150f020549', amount=₹700.2, date=2026-08-02); one-sided total=₹700.2.",
+          "estimated_amount_at_risk_inr": "700.2",
+          "amount_source": "schema_field",
+          "risk_classification": "non_leakage",
+          "classification_reason": "orphan is review-only and is never classified as proven leakage."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0088"
+          ],
+          "reason_code": "orphan",
+          "reason_detail": "No candidate exists on the bank side for ledger_txn_0088(reference='pay_74358cde56e847', amount=₹2250.87, date=2026-07-02); one-sided total=₹2250.87.",
+          "estimated_amount_at_risk_inr": "2250.87",
+          "amount_source": "schema_field",
+          "risk_classification": "non_leakage",
+          "classification_reason": "orphan is review-only and is never classified as proven leakage."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0132"
+          ],
+          "reason_code": "orphan",
+          "reason_detail": "No candidate exists on the bank side for ledger_txn_0132(reference='pay_7fac82e09dd443', amount=₹1253.04, date=2026-08-14); one-sided total=₹1253.04.",
+          "estimated_amount_at_risk_inr": "1253.04",
+          "amount_source": "schema_field",
+          "risk_classification": "non_leakage",
+          "classification_reason": "orphan is review-only and is never classified as proven leakage."
+        },
+        {
+          "record_ids": [
+            "ledger_txn_0172"
+          ],
+          "reason_code": "orphan",
+          "reason_detail": "No candidate exists on the bank side for ledger_txn_0172(reference='pay_636f639888d34b', amount=₹1152.55, date=2026-08-01); one-sided total=₹1152.55.",
+          "estimated_amount_at_risk_inr": "1152.55",
+          "amount_source": "schema_field",
+          "risk_classification": "non_leakage",
+          "classification_reason": "orphan is review-only and is never classified as proven leakage."
+        }
+      ]
+    },
+    "partial_refund": {
+      "entry_count": 4,
+      "leakage_entry_count": 4,
+      "non_leakage_entry_count": 0,
+      "entries": [
+        {
+          "record_ids": [
+            "bank_txn_0066",
+            "ledger_txn_0066"
+          ],
+          "reason_code": "partial_refund",
+          "reason_detail": "records=['bank_txn_0066', 'ledger_txn_0066']; totals=₹1768.69/₹1238.08; absolute_amount_delta=₹530.61; amount_delta=1.0000 (unexplained_delta); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7640; reference_similarity=1.0; partial_refund_plausible=True; refund_ratio=0.6999983038293878520260757962; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=uncertain, adjudicator_confidence=0.6500; fused_confidence=0.5138, band=low, route=exception. Records left=['bank_txn_0066'], right=['ledger_txn_0066']; Python totals ₹1768.69 vs ₹1238.08, delta=₹530.61 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=1.0000, embedding_similarity=0.7640, fee_plausible=0.0000, fee_rate=0.3000, fx_rounding_plausible=0.0000, partial_refund_plausible=1.0000, reference_similarity=1.0000, refund_ratio=0.7000, relative_amount_delta=0.3000, semantic=0.7640, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0066 (amount INR 1768.69) and right record ledger_txn_0066 (amount INR 1238.08) have an absolute sum delta of 530.61 INR, which exceeds the sum tolerance of 1.00 INR (sums_match_within_tolerance=false). However, the deterministic_partial_refund_finding flags a partial‑refund pattern (partial_refund_plausible=true, refund_ratio≈0.70) and several signal scores strongly support reconciliation: amount_delta=1.0, timing_delta=0.0, reference_similarity=1.0, partial_refund_plausible=1.0, and semantic/embedding similarity≈0.764. Because the deterministic partial‑refund signal outweighs the arithmetic mismatch but the mismatch remains large, the overall plausibility is not certain, leading to an \"uncertain\" verdict with moderate confidence.",
+          "estimated_amount_at_risk_inr": "530.61",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "partial_refund has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "bank_txn_0097",
+            "ledger_txn_0097"
+          ],
+          "reason_code": "partial_refund",
+          "reason_detail": "records=['bank_txn_0097', 'ledger_txn_0097']; totals=₹1689.92/₹1182.94; absolute_amount_delta=₹506.98; amount_delta=1.0000 (unexplained_delta); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7647; reference_similarity=1.0; partial_refund_plausible=True; refund_ratio=0.6999976330240484756674872183; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=uncertain, adjudicator_confidence=0.6500; fused_confidence=0.5138, band=low, route=exception. Records left=['bank_txn_0097'], right=['ledger_txn_0097']; Python totals ₹1689.92 vs ₹1182.94, delta=₹506.98 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=1.0000, embedding_similarity=0.7647, fee_plausible=0.0000, fee_rate=0.3000, fx_rounding_plausible=0.0000, partial_refund_plausible=1.0000, reference_similarity=1.0000, refund_ratio=0.7000, relative_amount_delta=0.3000, semantic=0.7647, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0097 (amount_inr=1689.92) and right record ledger_txn_0097 (amount_inr=1182.94) have an absolute_sum_delta_inr of 506.98 which exceeds the sum_tolerance_inr of 1.00 (sums_match_within_tolerance=false). Nonetheless, deterministic_partial_refund_finding reports partial_refund_plausible=true with a refund_ratio≈0.70, and signal_scores show strong reference_similarity=1.0 and timing_delta=0.0 (best) as well as semantic=0.7647. These conflicting signals mean the records could plausibly reconcile via a partial‑refund pattern, but the large delta violates the strict tolerance, so the outcome is uncertain.",
+          "estimated_amount_at_risk_inr": "506.98",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "partial_refund has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "bank_txn_0223",
+            "ledger_txn_0223"
+          ],
+          "reason_code": "partial_refund",
+          "reason_detail": "records=['bank_txn_0223', 'ledger_txn_0223']; totals=₹125.56/₹87.89; absolute_amount_delta=₹37.67; amount_delta=1.0000 (unexplained_delta); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7528; reference_similarity=1.0; partial_refund_plausible=True; refund_ratio=0.6999840713603058298821280663; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=uncertain, adjudicator_confidence=0.6500; fused_confidence=0.5138, band=low, route=exception. Records left=['bank_txn_0223'], right=['ledger_txn_0223']; Python totals ₹125.56 vs ₹87.89, delta=₹37.67 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=1.0000, embedding_similarity=0.7528, fee_plausible=0.0000, fee_rate=0.3000, fx_rounding_plausible=0.0000, partial_refund_plausible=1.0000, reference_similarity=1.0000, refund_ratio=0.7000, relative_amount_delta=0.3000, semantic=0.7528, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0223 (amount_inr=125.56) and right record ledger_txn_0223 (amount_inr=87.89) have a Python absolute sum delta of 37.67 INR, exceeding the sum tolerance of 1.00 INR (sums_match_within_tolerance=false). However, the deterministic_partial_refund_finding flags partial_refund_plausible=true with a refund_ratio≈0.70, and signal scores show reference_similarity=1.0 and timing_delta=0.0 (best). These signals support a partial‑refund reconciliation pattern, but the large amount delta and failed sum‑tolerance check prevent a confident match, leading to an uncertain verdict.",
+          "estimated_amount_at_risk_inr": "37.67",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "partial_refund has a supportable amount-at-risk estimate."
+        },
+        {
+          "record_ids": [
+            "bank_txn_0260",
+            "ledger_txn_0260"
+          ],
+          "reason_code": "partial_refund",
+          "reason_detail": "records=['bank_txn_0260', 'ledger_txn_0260']; totals=₹2388.9/₹1672.23; absolute_amount_delta=₹716.67; amount_delta=1.0000 (unexplained_delta); timing_delta=0.0000 with observed_lag_days=[0] and expected_lag_days=[2]; semantic_similarity=0.7441; reference_similarity=1.0; partial_refund_plausible=True; refund_ratio=0.7; semantic_backend=sentence_transformers; adjudicator=reasoning/openai/gpt-oss-120b, verdict=uncertain, adjudicator_confidence=0.6000; fused_confidence=0.5050, band=low, route=exception. Records left=['bank_txn_0260'], right=['ledger_txn_0260']; Python totals ₹2388.9 vs ₹1672.23, delta=₹716.67 against tolerance=₹1.00 (sums_match=false); signals: amount_delta=1.0000, embedding_similarity=0.7441, fee_plausible=0.0000, fee_rate=0.3000, fx_rounding_plausible=0.0000, partial_refund_plausible=1.0000, reference_similarity=1.0000, refund_ratio=0.7000, relative_amount_delta=0.3000, semantic=0.7441, semantic_evidence=1.0000, sums_match_within_cent=0.0000, timing_delta=0.0000. Qualitative adjudication: The left record bank_txn_0260 (INR 2388.9) and right record ledger_txn_0260 (INR 1672.23) have a Python‑computed absolute sum delta of 716.67 INR, far exceeding the sum tolerance of 1.00 INR (sums_match_within_tolerance=false). However, the deterministic_partial_refund_finding flags a partial‑refund pattern (partial_refund_plausible=true, refund_ratio=0.7) and the signal scores give strong evidence: reference_similarity=1.0, timing_delta=0.0, and partial_refund_plausible=1.0. These mixed signals lead to an uncertain reconciliation verdict.",
+          "estimated_amount_at_risk_inr": "716.67",
+          "amount_source": "derived_record_evidence",
+          "risk_classification": "leakage",
+          "classification_reason": "partial_refund has a supportable amount-at-risk estimate."
+        }
+      ]
+    }
+  }
+}

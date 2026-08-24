@@ -5,6 +5,13 @@ data/holdout/*.csv
 data/holdout/*.json
 data/holdout/HOLDOUT_HASH.txt
 !data/holdout/.gitkeep
+!data/holdout/*.csv
+!data/holdout/*.json
+!data/holdout/HOLDOUT_HASH.txt
 node_modules/
 frontend/dist/
 results/
+!results/
+results/*
+!results/current_run.json
+!results/exception_book.json

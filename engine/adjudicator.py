@@ -30,6 +30,7 @@ DEFAULT_GROUP_SUM_TOLERANCE = Decimal("1.00")  # PRD section 5 / Tier 1
 DEFAULT_FAST_MODEL = "llama-3.1-8b-instant"
 FAST_MODEL_REPLACEMENT = "openai/gpt-oss-20b"
 DEFAULT_REASONING_MODEL = "openai/gpt-oss-120b"
+MAX_SLEEP_CHUNK_SECONDS = 60.0
 STRICT_SCHEMA_MODELS = frozenset(
     {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}
 )
@@ -45,6 +46,10 @@ class ModelUnavailableError(RuntimeError):
 
 class AdjudicationError(RuntimeError):
     """Raised when Groq cannot produce a validated adjudication."""
+
+
+class ModelDailyRateLimitError(AdjudicationError):
+    """Raised when a model-specific daily token bucket is exhausted."""
 
 
 class Verdict(str, Enum):
@@ -97,6 +102,9 @@ class LLMBudget:
     rate_limit_retries: int = 0
     validation_retries: int = 0
     reasoning_escalations: int = 0
+    transport_error_hits: int = 0
+    transport_error_retries: int = 0
+    capacity_fallbacks: int = 0
 
     @classmethod
     def from_env(cls) -> "LLMBudget":
@@ -365,25 +373,51 @@ def _post_chat(
     estimated_tokens = _estimated_request_tokens(prompt, max_completion_tokens)
     for rate_attempt in range(max_rate_limit_retries + 1):
         budget.reserve_call(estimated_tokens)  # binding check before every attempt
-        response = session.post(
-            f"{GROQ_BASE_URL}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=timeout_seconds,
-        )
+        try:
+            response = session.post(
+                f"{GROQ_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=timeout_seconds,
+            )
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            budget.transport_error_hits += 1
+            if rate_attempt < max_rate_limit_retries:
+                budget.transport_error_retries += 1
+                delay = min(2**rate_attempt, 8)
+                LOGGER.warning(
+                    "Groq transport failure for %s (%s); retrying in %.1fs",
+                    model,
+                    type(exc).__name__,
+                    delay,
+                )
+                _sleep_in_chunks(sleep, delay)
+                continue
+            raise AdjudicationError(
+                f"Groq transport failed for {model} after bounded retries"
+            ) from exc
+        if response.status_code == 429 and _is_daily_token_limit(response):
+            budget.rate_limit_hits += 1
+            raise ModelDailyRateLimitError(
+                f"Groq daily token capacity exhausted for {model}"
+            )
         if response.status_code == 429 and rate_attempt < max_rate_limit_retries:
             budget.rate_limit_hits += 1
             budget.rate_limit_retries += 1
             retry_after = response.headers.get("retry-after")
             try:
-                delay = float(retry_after) if retry_after else min(2**rate_attempt, 8)
+                delay = (
+                    float(retry_after)
+                    if retry_after
+                    else min(2**rate_attempt, 8)
+                )
             except ValueError:
                 delay = min(2**rate_attempt, 8)
             LOGGER.warning("Groq rate limited %s; retrying in %.1fs", model, delay)
-            sleep(delay)
+            _sleep_in_chunks(sleep, delay)
             continue
         if response.status_code == 429:
             budget.rate_limit_hits += 1
@@ -419,6 +453,27 @@ def _post_chat(
                 f"Groq returned an invalid structured verdict from {model}"
             ) from exc
     raise AdjudicationError(f"Groq remained rate limited for {model}")
+
+
+def _sleep_in_chunks(
+    sleep: Callable[[float], None], delay_seconds: float
+) -> None:
+    """Honor provider backoff without one uninterruptibly long sleep call."""
+
+    remaining = max(0.0, delay_seconds)
+    while remaining:
+        chunk = min(remaining, MAX_SLEEP_CHUNK_SECONDS)
+        sleep(chunk)
+        remaining -= chunk
+
+
+def _is_daily_token_limit(response: requests.Response) -> bool:
+    try:
+        error = response.json().get("error") or {}
+        message = str(error.get("message") or "").lower()
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return "tokens per day" in message or "(tpd)" in message
 
 
 def _call_with_validation_retry(**kwargs: Any) -> _ModelVerdict:
@@ -503,10 +558,34 @@ def adjudicate(
         "max_rate_limit_retries": max_rate_limit_retries,
         "sleep": sleep,
     }
-    verdict = _call_with_validation_retry(model=selected_fast, **call_kwargs)
-    tier = "fast"
-    answering_model = selected_fast
-    if verdict.verdict is Verdict.UNCERTAIN or verdict.confidence < confidence_threshold:
+    answered_on_reasoning_capacity = False
+    try:
+        verdict = _call_with_validation_retry(model=selected_fast, **call_kwargs)
+        tier = "fast"
+        answering_model = selected_fast
+    except ModelDailyRateLimitError:
+        if selected_reasoning == selected_fast:
+            raise
+        active_budget.reasoning_escalations += 1
+        active_budget.capacity_fallbacks += 1
+        LOGGER.warning(
+            "Fast model %s exhausted daily token capacity; escalating to %s",
+            selected_fast,
+            selected_reasoning,
+        )
+        verdict = _call_with_validation_retry(
+            model=selected_reasoning, **call_kwargs
+        )
+        tier = "reasoning"
+        answering_model = selected_reasoning
+        answered_on_reasoning_capacity = True
+    if (
+        not answered_on_reasoning_capacity
+        and (
+            verdict.verdict is Verdict.UNCERTAIN
+            or verdict.confidence < confidence_threshold
+        )
+    ):
         active_budget.reasoning_escalations += 1
         LOGGER.info(
             "Escalating adjudication: fast verdict=%s confidence=%.3f threshold=%.3f",
@@ -554,6 +633,7 @@ __all__ = [
     "BudgetExceededError",
     "DEFAULT_GROUP_SUM_TOLERANCE",
     "LLMBudget",
+    "ModelDailyRateLimitError",
     "ModelUnavailableError",
     "Verdict",
     "adjudicate",

@@ -162,6 +162,9 @@ def build_live_report(
         "rate_limit_retries": budget.rate_limit_retries,
         "validation_retries": budget.validation_retries,
         "reasoning_escalations": budget.reasoning_escalations,
+        "transport_error_hits": budget.transport_error_hits,
+        "transport_error_retries": budget.transport_error_retries,
+        "capacity_fallbacks": budget.capacity_fallbacks,
         "elapsed_seconds": round(elapsed_seconds, 3),
         "example_rationales": examples,
     }

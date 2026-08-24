@@ -12,10 +12,10 @@ gen-data:
 	python3 -m data.generators.bank_generator
 	python3 -m data.generators.ledger_generator
 
-# Full pipeline: generate held-out data, run the matching engine, print the
-# metrics report. This is the command a stranger cloning the repo should be
-# able to run to reproduce every number in the pitch.
-demo: gen-data
+# Full fixture-free pipeline: verify the immutable held-out hash, run the
+# matching engine, persist audit/exception/snapshot artifacts, print metrics.
+# Never regenerate the frozen holdout as part of evaluation.
+demo:
 	python3 -m eval.harness
 
 test:

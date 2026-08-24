@@ -374,6 +374,192 @@ def test_adjudicator_retries_validation_escalates_and_uses_strict_schema():
         ][0]["content"]
 
 
+def test_adjudicator_retries_budgeted_transport_timeout():
+    class Response:
+        status_code = 200
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "verdict": "yes",
+                                    "confidence": 0.95,
+                                    "rationale": "Grounded signals agree.",
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 20},
+            }
+
+    class Session:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, *_args, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                import requests
+
+                raise requests.ReadTimeout("simulated timeout")
+            return Response()
+
+    session = Session()
+    budget = LLMBudget(call_limit=3, token_limit=20_000)
+    result = adjudicate(
+        [_record("bank_timeout", Source.BANK)],
+        [_record("ledger_timeout", Source.LEDGER)],
+        {"amount_delta": 0.0, "timing_delta": 0.0, "semantic": 1.0},
+        budget=budget,
+        api_key="test-key-not-real",
+        live_model_ids={"openai/gpt-oss-20b", "openai/gpt-oss-120b"},
+        fast_model="openai/gpt-oss-20b",
+        reasoning_model="openai/gpt-oss-120b",
+        session=session,
+        sleep=lambda _seconds: None,
+    )
+
+    assert result.verdict is Verdict.YES
+    assert session.calls == budget.calls_used == 2
+    assert budget.transport_error_hits == 1
+    assert budget.transport_error_retries == 1
+
+
+def test_adjudicator_chunks_oversized_provider_retry_delay():
+    class Response:
+        headers = {}
+
+        def __init__(self, status_code):
+            self.status_code = status_code
+            if status_code == 429:
+                self.headers = {"retry-after": "125"}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "verdict": "yes",
+                                    "confidence": 0.95,
+                                    "rationale": "Grounded signals agree.",
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 20},
+            }
+
+    class Session:
+        def __init__(self):
+            self.responses = iter([Response(429), Response(200)])
+
+        def post(self, *_args, **_kwargs):
+            return next(self.responses)
+
+    delays = []
+    budget = LLMBudget(call_limit=3, token_limit=20_000)
+    result = adjudicate(
+        [_record("bank_backoff", Source.BANK)],
+        [_record("ledger_backoff", Source.LEDGER)],
+        {"amount_delta": 0.0, "timing_delta": 0.0, "semantic": 1.0},
+        budget=budget,
+        api_key="test-key-not-real",
+        live_model_ids={"openai/gpt-oss-20b", "openai/gpt-oss-120b"},
+        fast_model="openai/gpt-oss-20b",
+        reasoning_model="openai/gpt-oss-120b",
+        session=Session(),
+        sleep=delays.append,
+    )
+
+    assert result.verdict is Verdict.YES
+    assert delays == [60.0, 60.0, 5.0]
+    assert budget.rate_limit_hits == budget.rate_limit_retries == 1
+
+
+def test_adjudicator_uses_reasoning_models_separate_daily_capacity():
+    class Response:
+        headers = {"retry-after": "900"}
+
+        def __init__(self, *, daily_limit=False):
+            self.status_code = 429 if daily_limit else 200
+            self.daily_limit = daily_limit
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            if self.daily_limit:
+                return {
+                    "error": {
+                        "message": (
+                            "Rate limit reached on tokens per day (TPD): "
+                            "Limit 200000"
+                        )
+                    }
+                }
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "verdict": "yes",
+                                    "confidence": 0.95,
+                                    "rationale": "Reasoning capacity confirms signals.",
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 20},
+            }
+
+    class Session:
+        def __init__(self):
+            self.models = []
+
+        def post(self, _url, **kwargs):
+            model = kwargs["json"]["model"]
+            self.models.append(model)
+            return Response(daily_limit=model == "openai/gpt-oss-20b")
+
+    session = Session()
+    budget = LLMBudget(call_limit=3, token_limit=20_000)
+    result = adjudicate(
+        [_record("bank_capacity", Source.BANK)],
+        [_record("ledger_capacity", Source.LEDGER)],
+        {"amount_delta": 0.0, "timing_delta": 0.0, "semantic": 1.0},
+        budget=budget,
+        api_key="test-key-not-real",
+        live_model_ids={"openai/gpt-oss-20b", "openai/gpt-oss-120b"},
+        fast_model="openai/gpt-oss-20b",
+        reasoning_model="openai/gpt-oss-120b",
+        session=session,
+        sleep=lambda _seconds: None,
+    )
+
+    assert result.verdict is Verdict.YES
+    assert result.answering_tier == "reasoning"
+    assert result.answering_model == "openai/gpt-oss-120b"
+    assert session.models == ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
+    assert budget.rate_limit_hits == 1
+    assert budget.reasoning_escalations == budget.capacity_fallbacks == 1
+
+
 def test_adjudicator_names_partial_refund_finding_in_prompt():
     class Response:
         status_code = 200
