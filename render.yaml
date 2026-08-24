@@ -17,7 +17,7 @@ services:
     name: parity
     runtime: python
     plan: free
-    buildCommand: "python -m pip install torch --index-url https://download.pytorch.org/whl/cpu && python -m pip install -r requirements.txt && cd frontend && npm ci && npm run build"
+    buildCommand: "python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu && python -m pip install -r requirements.txt && cd frontend && npm ci && npm run build"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /api/health
     autoDeploy: true

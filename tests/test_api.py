@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import shutil
 
 from fastapi.testclient import TestClient
 import pytest
 
-from app.api.service import APIService, SnapshotStore, SnapshotValidationError
+from app.api.service import (
+    APIService,
+    ProductionRunExecutor,
+    SnapshotStore,
+    SnapshotValidationError,
+)
 from app.main import create_app
 
 
@@ -15,6 +21,7 @@ def _snapshot(run_id: str = "run-a", match_rate: float = 0.97) -> dict:
         "run_id": run_id,
         "timestamp_utc": "2026-08-24T00:00:00+00:00",
         "holdout_hash": "2aacac85b9d15cc186c63b2ceb1557767c99b3dfacd9931e4655a3fd7f9d8154",
+        "outcome_digest": f"digest-{run_id}",
         "records_total": 2,
         "truth_transactions": 300,
         "match_rate": match_rate,
@@ -174,8 +181,16 @@ def test_rerun_rotates_snapshots_and_compares_match_rates(
 
     assert response.status_code == 200
     assert response.json() == {
-        "previous": {"run_id": "run-a", "match_rate": 0.97},
-        "current": {"run_id": "run-b", "match_rate": 0.98},
+        "previous": {
+            "run_id": "run-a",
+            "match_rate": 0.97,
+            "outcome_digest": "digest-run-a",
+        },
+        "current": {
+            "run_id": "run-b",
+            "match_rate": 0.98,
+            "outcome_digest": "digest-run-b",
+        },
         "reproducible": False,
         "match_rate_delta": pytest.approx(0.01),
     }
@@ -199,3 +214,23 @@ def test_invalid_rerun_does_not_replace_current_snapshot(
     assert store.load_current()["run_id"] == "run-a"
     assert store.load_previous() is None
 
+
+def test_production_executor_replays_canonical_run_without_network(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    isolated = tmp_path / "clean-replay"
+    shutil.copytree(repo_root / "data" / "holdout", isolated / "data" / "holdout")
+    (isolated / "results").mkdir(parents=True)
+    shutil.copy2(
+        repo_root / "results" / "canonical_eval.json",
+        isolated / "results" / "canonical_eval.json",
+    )
+
+    snapshot = ProductionRunExecutor(isolated)()
+
+    summary = snapshot["summary"]
+    assert summary["records_total"] == 628
+    assert summary["truth_transactions"] == 300
+    assert summary["matches"] == {"tier1": 219, "tier2": 53, "total": 272}
+    assert summary["precision"] == 1.0
+    assert summary["false_positive_cost_inr"] == "0"
+    assert summary["audit"] == {"entries_written": 310, "records_covered": 628}

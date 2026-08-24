@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Avatar,
   Badge,
   Box,
   Button,
@@ -501,7 +502,7 @@ function ReproducibilityCheck({ result, isRunning, error, onRerun }) {
           <Box flex="1 1 auto">
             <Heading size="medium">Reproducibility check</Heading>
             <Text marginTop="spacing.2" size="small" color="surface.text.gray.muted">
-              Re-run the frozen batch and compare its match rate with the previous run.
+              Replay the frozen batch twice and compare complete per-record outcome digests.
             </Text>
           </Box>
           <Button onClick={onRerun} isLoading={isRunning} isDisabled={isRunning}>
@@ -642,6 +643,7 @@ export default function App() {
     setRerunError("");
     setRerunResult(null);
     try {
+      await requestJson("/api/rerun", { method: "POST" });
       const result = await requestJson("/api/rerun", { method: "POST" });
       setRerunResult(result);
       await loadDashboard();
@@ -694,15 +696,26 @@ export default function App() {
         backgroundColor="surface.background.gray.intense"
         elevation="lowRaised"
       >
-        <Badge color="primary" emphasis="subtle">
-          Frozen held-out audit
-        </Badge>
-        <Display as="h1" size="medium" marginTop="spacing.4">
-          Parity
-        </Display>
-        <Text marginTop="spacing.3" color="surface.text.gray.subtle">
-          A source-linked reconciliation investigator that shows its evidence, budgets, and
-          exceptions.
+        <Box display="flex" alignItems="center" gap="spacing.5">
+          <Avatar
+            src="/brand/parity-logo-a1.png"
+            alt="Parity ledger seal"
+            name="Parity"
+            size="xlarge"
+            variant="square"
+          />
+          <Box>
+            <Badge color="primary" emphasis="subtle">
+              Frozen held-out audit
+            </Badge>
+            <Display as="h1" size="medium" marginTop="spacing.4">
+              Parity
+            </Display>
+          </Box>
+        </Box>
+        <Text marginTop="spacing.4" color="surface.text.gray.subtle">
+          A restrained financial-reconciliation investigator that finds evidence, enforces
+          budgets, and flags exceptions without acting on merchant funds.
         </Text>
         <Box display="flex" flexWrap="wrap" gap="spacing.3" marginTop="spacing.5">
           <Badge color="positive">{`Precision ${asPercent(summary.precision)}`}</Badge>

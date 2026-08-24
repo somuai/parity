@@ -16,13 +16,17 @@ Parity targets the **multi-source reconciliation** direction. Every design decis
 
 ## 1. Problem statement
 
-A merchant's money moves through three records that should describe the same events and never quite do:
+A merchant's money can move through three records that should describe the same events and never quite do:
 
 1. **Razorpay settlement report** (real, via test-mode Settlement Recon API) — what Razorpay says it paid out.
 2. **Bank statement** (synthetic) — what actually hit the account.
 3. **Internal ledger** (synthetic) — what the business's books say happened.
 
-Today this gets reconciled by a person in a spreadsheet, squinting at three tabs. Parity ingests all three, matches them, and produces two things: a resolved set with a confidence-scored trail back to source, and an exception book — the entries it refused to guess on, each with a specific reason.
+The submitted, labeled evaluation compares the frozen bank statement with the
+internal ledger. Razorpay test mode is implemented as a strict live
+connectivity/contract gate, not as a labeled third leg. Parity produces a
+matched set with a confidence-scored trail back to source and an exception
+book — the entries it refused to guess on, each with a specific reason.
 
 **Non-goals:** no live money movement, no auto-remediation, no conversational interface, no forecasting. This is a verifier, not an actor — that distinction is the whole reason this is Track 04 and not Track 03.
 
@@ -30,9 +34,15 @@ Today this gets reconciled by a person in a spreadsheet, squinting at three tabs
 
 ## 2. The pitch (what the 5-minute video leads with)
 
-Not a match-rate percentage. The exception book itself is the story, because the exceptions that represent real leakage are the ones worth a human's five minutes:
+Not only a match-rate percentage. The exception book itself is the story,
+because the exceptions that represent evidence-supported leakage are the ones
+worth a human's five minutes:
 
-> *"We fed Parity 1,200 transactions across a real Razorpay test-mode settlement feed, a bank statement, and an internal ledger. It auto-resolved 97%+ in under a minute. Buried in what it couldn't resolve: a duplicate settlement entry worth ₹8,200, six refunds issued but never logged in the ledger, and a cross-border fee miscalculation nobody had caught. The remaining records it flagged — not guessed on — each with the exact reason why."*
+> *"On 300 frozen truth transactions, Parity found 272 grounded matches: a
+> 90.67% match rate at 100% precision and 91.89% recall. It separately flagged
+> 13 evidence-supported leakage entries totaling ₹12,428.63 and 25 review-only
+> entries totaling ₹5,356.66. It did not blend the two figures or guess through
+> provider failures."*
 
 Every number in that pitch has to be real, reproducible from the repo, and separable in the report between "true leakage" (money genuinely at risk) and "needs a human eyeball but nothing's actually wrong" (a timing lag, a rounding difference). Conflating the two is the fastest way to lose credibility with a panel primed to distrust a single dramatic figure.
 
@@ -42,7 +52,11 @@ Every number in that pitch has to be real, reproducible from the repo, and separ
 
 Two facts worth building the pitch around, not just the architecture:
 
-- **The Settlement Recon API is a data feed, not a reconciliation engine.** It returns what settled — payments, refunds, transfers, adjustments — but does no cross-referencing against a merchant's own bank statement or internal ledger. That correlation work is left entirely to the merchant. Parity closes exactly that specific, real gap, using the API's own real output as one of its three inputs — not a vague "reconciliation is hard" claim.
+- **The Settlement Recon API is a data feed, not a reconciliation engine.** It
+  returns settlement data but does no cross-referencing against a merchant's
+  own bank statement or internal ledger. The submitted Razorpay client proves
+  authenticated, strict ingestion of that feed; integration as a labeled
+  third reconciliation leg is explicitly deferred.
 - **Razorpay's own Agent Studio announcement states that they want third-party builders creating specialized agents for their ecosystem, and names "automated tax reconciliation tools" as an explicit example.** Parity is a concrete instance of exactly that stated (but not yet shipped) direction — worth saying plainly in the pitch, since it's a real citable claim, not a stretch.
 
 **UI differentiation:** the hosted app (Section 6) is built with `@razorpay/blade`, Razorpay's own open-source, MIT-licensed design system — the same system behind RazorSense — rather than a hand-matched color palette. RazorSense's own emotional-state language (Calm / Joyful / Caution / Regret) maps directly onto match confidence bands, which is a genuine reuse of their design logic, not a coincidence to gloss over in the pitch.
@@ -128,13 +142,17 @@ The three-signal fusion in Tier 2 is a direct reapplication of the spatial/frequ
 8. FX/currency rounding variance
 9. Orphan record — genuinely present in one source only (the true, unresolvable exception)
 
-Held-out labeled set: **300 synthetic records**, ground-truth match/no-match labels frozen and hashed before Tier-1/Tier-2 development starts, so tuning can't leak into the "held-out" claim. A separate **50+ record live demo batch** pulls real settlement data from the test-mode API, satisfying the track's literal batch-size requirement with real signal.
+Held-out labeled set: **300 synthetic truth transactions represented by 628
+bank/ledger source rows**, with ground-truth labels frozen and hashed before
+Tier-1/Tier-2 development. The Razorpay test-mode command is a live API
+connectivity and response-contract check; no unlabeled API rows are counted in
+the held-out accuracy claim.
 
 ---
 
 ## 5. Matching engine design
 
-- **Tier 1 (deterministic):** exact match on `reference` + `amount` (± ₹1 rounding) + `txn_date` (± settlement-cycle window). Target: 55–70% auto-resolved, zero false positives — this tier must never guess.
+- **Tier 1 (deterministic):** exact match on `reference` + `amount` (± ₹1 rounding) + `txn_date` (± settlement-cycle window). Target: 55–70% matched, zero false positives — this tier must never guess.
 - **Tier 2 (residual reasoning):** for unmatched records, compute three independent signals — amount-delta score, timing-delta score, semantic similarity of `description`/`counterparty` via embeddings — feed all three plus the candidate pair to an LLM adjudicator for a grounded yes/no/uncertain with a stated reason, then fuse into a single confidence score.
 - **Confidence bands:** High (≥0.9) → auto-accept with logged rationale. Medium (0.6–0.9) → auto-accept but surfaced in a "review if you have 5 minutes" list. Low (<0.6) → **exception book**, never guessed.
 - **Grounding rule:** every Tier-2 decision must cite the exact source record IDs and the signal values that drove it — no decision is accepted without a traceable rationale, because an unexplainable match is functionally the same failure as a wrong one.
@@ -144,7 +162,7 @@ Held-out labeled set: **300 synthetic records**, ground-truth match/no-match lab
 ## 6. Evaluation & observability
 
 **Metrics reported (all computed against the frozen held-out set, never the tuning set):**
-- Match rate (% auto-resolved, split by tier)
+- Match rate (% matched, split by tier)
 - Precision and recall on the held-out labels
 - False-positive cost estimate (₹ sum of any incorrectly auto-matched records — target: as close to zero as the system can prove)
 - Throughput (records/second, and wall-clock time for the full batch)

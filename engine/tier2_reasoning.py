@@ -17,9 +17,11 @@ from config.schema import CanonicalRecord, ExceptionRecord, ExceptionType, Match
 from engine.adjudicator import (
     AdjudicationError,
     AdjudicationResult,
+    DEFAULT_GROUP_SUM_TOLERANCE,
     LLMBudget,
     Verdict,
     adjudicate,
+    compute_group_sum_check,
     fetch_live_model_ids,
 )
 from engine.confidence import ConfidenceResult, fuse_confidence
@@ -158,10 +160,17 @@ def reconcile_tier2(
             semantic.semantic_similarity,
             semantic.reference_similarity or 0.0,
         )
+        semantic_reliability = _semantic_reliability(semantic.backend)
+        _, _, group_sum_delta, group_sums_match = compute_group_sum_check(
+            group.bank_records,
+            group.ledger_records,
+            tolerance=DEFAULT_GROUP_SUM_TOLERANCE,
+        )
         signal_scores = {
             **numeric.signal_scores,
             **semantic.as_signal_scores(),
             "semantic_evidence": semantic_evidence,
+            "semantic_reliability": semantic_reliability,
             "relative_amount_delta": float(numeric.relative_amount_delta),
             "fee_rate": float(numeric.fee_rate or Decimal("0")),
             "fee_plausible": float(numeric.fee_plausible),
@@ -171,7 +180,28 @@ def reconcile_tier2(
             ),
             "refund_ratio": float(numeric.refund_ratio or Decimal("0")),
             "sums_match_within_cent": float(numeric.sums_match_within_cent),
+            "group_sums_match_within_tolerance": float(group_sums_match),
         }
+
+        grouped = len(group.bank_records) > 1 or len(group.ledger_records) > 1
+        if grouped and not group_sums_match:
+            exceptions.append(
+                ExceptionRecord(
+                    record_ids=group.record_ids,
+                    reason_code=_specific_reason_code(group, numeric, semantic),
+                    reason_detail=(
+                        f"{_grounded_signal_summary(group, numeric, semantic)}; "
+                        f"group_sum_delta=₹{group_sum_delta} exceeds the deterministic "
+                        f"tolerance=₹{DEFAULT_GROUP_SUM_TOLERANCE}; "
+                        "group_sums_match_within_tolerance=False, so the group was "
+                        "flagged before LLM adjudication."
+                    ),
+                    confidence=0.0,
+                    signal_scores=signal_scores,
+                    semantic_backend=semantic.backend,
+                )
+            )
+            continue
 
         try:
             adjudicator_kwargs = {"budget": active_budget}
@@ -195,6 +225,9 @@ def reconcile_tier2(
                         f"adjudication unavailable ({type(exc).__name__}), so the "
                         "candidate was conservatively flagged instead of guessed."
                     ),
+                    confidence=0.0,
+                    signal_scores=signal_scores,
+                    semantic_backend=semantic.backend,
                 )
             )
             continue
@@ -207,6 +240,7 @@ def reconcile_tier2(
             amount_delta=numeric.amount_delta,
             timing_delta=numeric.timing_delta,
             semantic_similarity=semantic_evidence,
+            semantic_reliability=semantic_reliability,
             adjudicator_verdict=verdict,
             adjudicator_confidence=adjudication.confidence,
         )
@@ -219,6 +253,11 @@ def reconcile_tier2(
                     record_ids=group.record_ids,
                     reason_code=_specific_reason_code(group, numeric, semantic),
                     reason_detail=rationale,
+                    confidence=fusion.score,
+                    signal_scores=signal_scores,
+                    semantic_backend=semantic.backend,
+                    adjudicator_tier=adjudication.answering_tier,
+                    adjudicator_model=adjudication.answering_model,
                 )
             )
             continue
@@ -297,6 +336,16 @@ def _score_group_semantics(
     )
 
 
+def _semantic_reliability(backend: str) -> float:
+    """Return conservative evidence strength for the semantic backend."""
+
+    if backend in {"sentence_transformers", "fixed_test_encoder", "injected_encoder"}:
+        return 1.0
+    if backend == "lexical_fallback":
+        return 0.35
+    return 0.0
+
+
 def _separate_duplicate_rows(
     group: CandidateGroup,
 ) -> tuple[CandidateGroup, list[ExceptionRecord]]:
@@ -327,6 +376,7 @@ def _separate_duplicate_rows(
                 f"txn_date={record.txn_date.isoformat()}, "
                 f"counterparty={record.counterparty!r}."
             ),
+            signal_scores={"duplicate_fingerprint_exact": 1.0},
         )
         for record in extras
     ]
@@ -350,6 +400,7 @@ def _one_sided_exception(group: CandidateGroup) -> ExceptionRecord:
             f"one-sided total=₹{amount}."
         ),
         estimated_amount_at_risk=amount,
+        signal_scores={"one_sided_total_inr": float(abs(amount))},
     )
 
 

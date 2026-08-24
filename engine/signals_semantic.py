@@ -22,6 +22,7 @@ from config.schema import CanonicalRecord
 
 
 DEFAULT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_MODEL_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _REFERENCE_NOISE_RE = re.compile(r"[^a-z0-9]")
@@ -228,7 +229,9 @@ def score_semantic_pair(
 
     try:
         if encoder is None:
-            resolved_encoder = _load_sentence_transformer(model_name)
+            resolved_encoder = _load_sentence_transformer(
+                model_name, DEFAULT_MODEL_REVISION
+            )
             resolved_backend: SemanticBackend = "sentence_transformers"
         else:
             resolved_encoder = encoder
@@ -265,12 +268,14 @@ compute_semantic_signals = score_semantic_pair
 
 
 @lru_cache(maxsize=2)
-def _load_sentence_transformer(model_name: str) -> SentenceEncoder:
+def _load_sentence_transformer(
+    model_name: str, revision: str = DEFAULT_MODEL_REVISION
+) -> SentenceEncoder:
     """Load each selected small model once per process, on first use only."""
 
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(model_name)
+    return SentenceTransformer(model_name, revision=revision)
 
 
 def _injected_encoder_backend(

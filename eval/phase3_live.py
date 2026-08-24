@@ -27,6 +27,9 @@ from engine.tier2_reasoning import Tier2RunResult, reconcile_tier2
 
 
 HOLDOUT_DIR = Path("data/holdout")
+EXPECTED_HOLDOUT_HASH = (
+    "2aacac85b9d15cc186c63b2ceb1557767c99b3dfacd9931e4655a3fd7f9d8154"
+)
 
 
 def true_id_for_record(record_id: str, truth_ids: set[str]) -> str:
@@ -64,17 +67,44 @@ def build_live_report(
         if item["exception_type"] != ExceptionType.ORPHAN.value
     }
     all_decisions = [*tier1_decisions, *tier2.decisions]
+    source_records = {
+        record.record_id: record for record in [*bank_records, *ledger_records]
+    }
+    if len(source_records) != len(bank_records) + len(ledger_records):
+        raise ValueError("held-out source record IDs must be globally unique")
     correct_decisions: list[MatchDecision] = []
     false_positive_decisions: list[MatchDecision] = []
     matched_truth_ids: set[str] = set()
     for decision in all_decisions:
-        decision_truth_ids = {
-            true_id_for_record(record_id, truth_ids)
-            for record_id in decision.record_ids
-        }
-        if len(decision_truth_ids) == 1:
+        unique_record_ids = set(decision.record_ids)
+        known_records = [
+            source_records[record_id]
+            for record_id in unique_record_ids
+            if record_id in source_records
+        ]
+        structurally_complete = (
+            len(unique_record_ids) == len(decision.record_ids)
+            and len(known_records) == len(unique_record_ids)
+            and {record.source for record in known_records}
+            == {Source.BANK, Source.LEDGER}
+        )
+        try:
+            decision_truth_ids = {
+                true_id_for_record(record_id, truth_ids)
+                for record_id in unique_record_ids
+            }
+        except (IndexError, ValueError):
+            decision_truth_ids = set()
+        true_id = next(iter(decision_truth_ids)) if len(decision_truth_ids) == 1 else None
+        is_correct = bool(
+            structurally_complete
+            and true_id is not None
+            and true_id in resolvable_ids
+            and true_id not in matched_truth_ids
+        )
+        if is_correct:
             correct_decisions.append(decision)
-            matched_truth_ids.update(decision_truth_ids)
+            matched_truth_ids.add(true_id)
         else:
             false_positive_decisions.append(decision)
 
@@ -83,15 +113,13 @@ def build_live_report(
         for exception in tier2.exceptions
         for record_id in exception.record_ids
     }
-    source_records = {
-        record.record_id: record for record in [*bank_records, *ledger_records]
-    }
     false_positive_cost = sum(
         (
             abs(source_records[record_id].amount)
             for decision in false_positive_decisions
             for record_id in decision.record_ids
-            if source_records[record_id].source is Source.BANK
+            if record_id in source_records
+            and source_records[record_id].source is Source.BANK
         ),
         Decimal("0"),
     )
@@ -103,7 +131,7 @@ def build_live_report(
         if precision_denominator
         else 0.0
     )
-    recall = len(true_positive_ids) / len(resolvable_ids)
+    recall = len(true_positive_ids) / len(resolvable_ids) if resolvable_ids else 0.0
     match_rate = len(true_positive_ids) / len(truth)
 
     resolved_only = matched_truth_ids - exception_truth_ids
@@ -119,20 +147,11 @@ def build_live_report(
         "holdout_hash": holdout_hash,
         "truth_transactions": len(truth),
         "resolvable_truth_transactions": len(resolvable_ids),
-        "tier1_matched_truth_transactions": len(
-            {
-                true_id_for_record(record_id, truth_ids)
-                for decision in tier1_decisions
-                for record_id in decision.record_ids
-            }
+        "tier1_matched_truth_transactions": sum(
+            decision.tier == 1 for decision in correct_decisions
         ),
-        "tier2_matched_truth_transactions": len(
-            matched_truth_ids
-            - {
-                true_id_for_record(record_id, truth_ids)
-                for decision in tier1_decisions
-                for record_id in decision.record_ids
-            }
+        "tier2_matched_truth_transactions": sum(
+            decision.tier == 2 for decision in correct_decisions
         ),
         "matched_truth_transactions": len(matched_truth_ids),
         "correct_auto_matches": len(correct_decisions),
@@ -175,9 +194,10 @@ def run_live_evaluation() -> dict[str, Any]:
 
     stored_hash = (HOLDOUT_DIR / "HOLDOUT_HASH.txt").read_text().strip()
     actual_hash = compute_holdout_hash(HOLDOUT_DIR)
-    if actual_hash != stored_hash:
+    if stored_hash != EXPECTED_HOLDOUT_HASH or actual_hash != EXPECTED_HOLDOUT_HASH:
         raise RuntimeError(
-            f"Frozen holdout hash mismatch: stored={stored_hash}, actual={actual_hash}"
+            "Frozen holdout hash mismatch: "
+            f"expected={EXPECTED_HOLDOUT_HASH}, stored={stored_hash}, actual={actual_hash}"
         )
 
     bank_records, ledger_records = load_holdout_records(HOLDOUT_DIR)

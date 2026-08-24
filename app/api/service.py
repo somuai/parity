@@ -6,10 +6,10 @@ invokes the existing Tier 1/Tier 2 engine; the API contains no matching rules.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import tempfile
 import threading
 import time
@@ -22,6 +22,7 @@ from config.schema import CanonicalRecord, ExceptionRecord, MatchDecision
 SNAPSHOT_SCHEMA_VERSION = 1
 CURRENT_SNAPSHOT = "current_run.json"
 PREVIOUS_SNAPSHOT = "previous_run.json"
+CANONICAL_EVAL = "canonical_eval.json"
 
 
 class SnapshotNotFoundError(RuntimeError):
@@ -168,15 +169,27 @@ class APIService:
         previous_rate = (
             float(previous_summary["match_rate"]) if previous_summary else None
         )
+        current_digest = current_summary.get("outcome_digest")
+        previous_digest = previous_summary.get("outcome_digest") if previous_summary else None
         return {
             "previous": (
-                {"run_id": previous["run_id"], "match_rate": previous_rate}
+                {
+                    "run_id": previous["run_id"],
+                    "match_rate": previous_rate,
+                    "outcome_digest": previous_digest,
+                }
                 if previous
                 else None
             ),
-            "current": {"run_id": snapshot["run_id"], "match_rate": current_rate},
-            "reproducible": (
-                previous_rate is None or abs(current_rate - previous_rate) < 1e-12
+            "current": {
+                "run_id": snapshot["run_id"],
+                "match_rate": current_rate,
+                "outcome_digest": current_digest,
+            },
+            "reproducible": bool(
+                previous_digest
+                and current_digest
+                and previous_digest == current_digest
             ),
             "match_rate_delta": (
                 None if previous_rate is None else current_rate - previous_rate
@@ -185,10 +198,11 @@ class APIService:
 
 
 class ProductionRunExecutor:
-    """Export a fixture-free held-out engine run into the API snapshot contract."""
+    """Export a live refresh or deterministic canonical replay to a snapshot."""
 
-    def __init__(self, repo_root: Path) -> None:
+    def __init__(self, repo_root: Path, *, live: bool = False) -> None:
         self.repo_root = Path(repo_root)
+        self.live = live
 
     def __call__(self) -> dict[str, Any]:
         # Late imports keep GET endpoints light and prevent model/network work.
@@ -199,32 +213,49 @@ class ProductionRunExecutor:
         from engine.tier1_deterministic import match_tier1
         from engine.tier2_reasoning import reconcile_tier2
         from eval.exception_book import build_exception_book
-        from eval.phase3_live import build_live_report
+        from eval.phase3_live import EXPECTED_HOLDOUT_HASH, build_live_report
 
         holdout_dir = self.repo_root / "data" / "holdout"
         stored_hash = (
             holdout_dir / "HOLDOUT_HASH.txt"
         ).read_text(encoding="utf-8").strip()
         actual_hash = compute_holdout_hash(holdout_dir)
-        if actual_hash != stored_hash:
+        if stored_hash != EXPECTED_HOLDOUT_HASH or actual_hash != EXPECTED_HOLDOUT_HASH:
             raise RuntimeError(
-                f"Frozen holdout hash mismatch: stored={stored_hash}, actual={actual_hash}"
+                "Frozen holdout hash mismatch: "
+                f"expected={EXPECTED_HOLDOUT_HASH}, stored={stored_hash}, "
+                f"actual={actual_hash}"
             )
 
         bank_records, ledger_records = load_holdout_records(holdout_dir)
         tier1, unmatched_bank, unmatched_ledger = match_tier1(
             bank_records, ledger_records
         )
-        budget = LLMBudget.from_env()
-        started = time.monotonic()
-        tier2 = reconcile_tier2(
-            unmatched_bank,
-            unmatched_ledger,
-            budget=budget,
-            semantic_encoder=None,
-            allow_lexical_fallback=False,
-        )
-        elapsed = time.monotonic() - started
+        canonical_path = self.repo_root / "results" / CANONICAL_EVAL
+        if self.live:
+            budget = LLMBudget.from_env()
+            started = time.monotonic()
+            tier2 = reconcile_tier2(
+                unmatched_bank,
+                unmatched_ledger,
+                budget=budget,
+                semantic_encoder=None,
+                allow_lexical_fallback=False,
+            )
+            elapsed = time.monotonic() - started
+            canonical = None
+        else:
+            canonical = _load_canonical_eval(canonical_path, actual_hash)
+            recorded_tier1 = canonical["tier1_decisions"]
+            actual_tier1 = [decision.model_dump(mode="json") for decision in tier1]
+            if actual_tier1 != recorded_tier1:
+                raise RuntimeError(
+                    "Tier 1 output drifted from the canonical live evaluation; "
+                    "run make eval-tier2-live and review the changed metrics"
+                )
+            tier2 = _tier2_from_canonical(canonical["tier2"])
+            budget = _budget_from_canonical(canonical["budget"])
+            elapsed = float(canonical["report"]["elapsed_seconds"])
         all_records = [*bank_records, *ledger_records]
         source_records = {record.record_id: record for record in all_records}
         exception_book = build_exception_book(tier2.exceptions, source_records)
@@ -241,6 +272,8 @@ class ProductionRunExecutor:
             holdout_hash=actual_hash,
             elapsed_seconds=elapsed,
         )
+        if canonical is not None:
+            _verify_canonical_metrics(report, canonical["report"])
         snapshot = build_snapshot(
             report=report,
             records=all_records,
@@ -252,38 +285,150 @@ class ProductionRunExecutor:
         results_dir = self.repo_root / "results"
         with AuditStore(results_dir / "audit.sqlite3") as audit_store:
             audit_ids = audit_store.persist_all(
-                [*tier1, *tier2.decisions], tier2.exceptions
+                [*tier1, *tier2.decisions],
+                tier2.exceptions,
+                run_id=snapshot["run_id"],
             )
-            audit_store.verify_record_coverage(source_records)
+            audit_store.verify_record_coverage(
+                source_records,
+                run_id=snapshot["run_id"],
+            )
         snapshot["summary"]["audit"] = {
             "entries_written": len(audit_ids),
             "records_covered": len(source_records),
         }
         _atomic_write_json(results_dir / "exception_book.json", exception_book)
         validate_snapshot(snapshot)
+        if self.live:
+            _atomic_write_json(
+                canonical_path,
+                _canonical_eval_payload(
+                    holdout_hash=actual_hash,
+                    tier1=tier1,
+                    tier2=tier2,
+                    budget=budget,
+                    report=report,
+                ),
+            )
         return snapshot
 
 
-_SIGNAL_PATTERN = re.compile(
-    r"(?P<name>amount_delta|timing_delta|semantic_similarity|reference_similarity|"
-    r"fused_confidence|partial_refund_plausible|refund_ratio)="
-    r"(?P<value>None|True|False|-?\d+(?:\.\d+)?)"
+def _canonical_eval_payload(
+    *,
+    holdout_hash: str,
+    tier1: Sequence[MatchDecision],
+    tier2: Any,
+    budget: Any,
+    report: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "holdout_hash": holdout_hash,
+        "tier1_decisions": [decision.model_dump(mode="json") for decision in tier1],
+        "tier2": {
+            "decisions": [
+                decision.model_dump(mode="json") for decision in tier2.decisions
+            ],
+            "exceptions": [
+                exception.model_dump(mode="json") for exception in tier2.exceptions
+            ],
+            "calls_used": tier2.calls_used,
+            "tokens_used": tier2.tokens_used,
+            "semantic_backend_counts": tier2.semantic_backend_counts,
+            "answering_tier_counts": tier2.answering_tier_counts,
+            "answering_model_counts": tier2.answering_model_counts,
+            "adjudication_failures": tier2.adjudication_failures,
+        },
+        "budget": {
+            name: getattr(budget, name)
+            for name in (
+                "call_limit",
+                "token_limit",
+                "calls_used",
+                "tokens_used",
+                "rate_limit_hits",
+                "rate_limit_retries",
+                "validation_retries",
+                "reasoning_escalations",
+                "transport_error_hits",
+                "transport_error_retries",
+                "capacity_fallbacks",
+            )
+        },
+        "report": dict(report),
+    }
+
+
+def _load_canonical_eval(path: Path, holdout_hash: str) -> dict[str, Any]:
+    if not path.exists():
+        raise RuntimeError(
+            f"Missing canonical live evaluation at {path}; run make eval-tier2-live"
+        )
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        raise RuntimeError("Canonical live evaluation has an unsupported schema")
+    if value.get("holdout_hash") != holdout_hash:
+        raise RuntimeError("Canonical live evaluation does not match the frozen holdout")
+    return value
+
+
+def _tier2_from_canonical(payload: Mapping[str, Any]) -> Any:
+    from engine.tier2_reasoning import Tier2RunResult
+
+    return Tier2RunResult(
+        decisions=[MatchDecision.model_validate(item) for item in payload["decisions"]],
+        exceptions=[
+            ExceptionRecord.model_validate(item) for item in payload["exceptions"]
+        ],
+        calls_used=int(payload["calls_used"]),
+        tokens_used=int(payload["tokens_used"]),
+        semantic_backend_counts=dict(payload["semantic_backend_counts"]),
+        answering_tier_counts=dict(payload["answering_tier_counts"]),
+        answering_model_counts=dict(payload["answering_model_counts"]),
+        adjudication_failures=int(payload["adjudication_failures"]),
+    )
+
+
+def _budget_from_canonical(payload: Mapping[str, Any]) -> Any:
+    from engine.adjudicator import LLMBudget
+
+    return LLMBudget(**{name: int(value) for name, value in payload.items()})
+
+
+_CANONICAL_METRIC_FIELDS = (
+    "truth_transactions",
+    "resolvable_truth_transactions",
+    "tier1_matched_truth_transactions",
+    "tier2_matched_truth_transactions",
+    "matched_truth_transactions",
+    "false_positive_decisions",
+    "match_rate",
+    "precision",
+    "recall",
+    "false_positive_cost_inr",
+    "exception_book_transactions",
+    "matched_and_exception_overlap",
+    "neither_matched_nor_exception",
+    "exception_truth_types",
+    "semantic_backend_counts",
+    "answering_tier_counts",
+    "answering_model_counts",
+    "adjudication_failures",
+    "llm_calls_used",
+    "llm_tokens_used",
 )
 
 
-def _exception_signals(detail: str) -> dict[str, float]:
-    """Recover the named, grounded values carried by ExceptionRecord detail."""
-
-    values: dict[str, float] = {}
-    for match in _SIGNAL_PATTERN.finditer(detail):
-        raw = match.group("value")
-        if raw == "None":
-            continue
-        if raw in {"True", "False"}:
-            values[match.group("name")] = float(raw == "True")
-        else:
-            values[match.group("name")] = float(raw)
-    return values
+def _verify_canonical_metrics(
+    actual: Mapping[str, Any], expected: Mapping[str, Any]
+) -> None:
+    drift = {
+        field: {"expected": expected.get(field), "actual": actual.get(field)}
+        for field in _CANONICAL_METRIC_FIELDS
+        if actual.get(field) != expected.get(field)
+    }
+    if drift:
+        raise RuntimeError(f"Canonical replay metric drift: {drift}")
 
 
 def _confidence_band(confidence: float, *, exception: bool = False) -> str:
@@ -342,8 +487,8 @@ def build_snapshot(
                 "estimated_amount_at_risk_inr": None,
             }
     for exception in exceptions:
-        signals = _exception_signals(exception.reason_detail)
-        confidence = signals.get("fused_confidence", 0.0)
+        signals = dict(exception.signal_scores)
+        confidence = exception.confidence
         for record_id in exception.record_ids:
             if record_id in by_id:
                 raise SnapshotValidationError(
@@ -351,7 +496,7 @@ def build_snapshot(
                 )
             by_id[record_id] = {
                 "status": "exception",
-                "tier": 2,
+                "tier": exception.tier,
                 "confidence": confidence,
                 "confidence_band": _confidence_band(confidence, exception=True),
                 "rationale": exception.reason_detail,
@@ -377,6 +522,30 @@ def build_snapshot(
         {**_base_record(record), **by_id[record.record_id]}
         for record in sorted(records, key=lambda item: item.record_id)
     ]
+    outcome_payload = [
+        {
+            key: record[key]
+            for key in (
+                "id",
+                "status",
+                "tier",
+                "confidence",
+                "rationale",
+                "signal_scores",
+                "reason_code",
+                "estimated_amount_at_risk_inr",
+            )
+        }
+        for record in api_records
+    ]
+    outcome_digest = hashlib.sha256(
+        json.dumps(
+            outcome_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
     leakage = exception_book["leakage"]
     non_leakage = exception_book["non_leakage"]
     run_id = f"heldout-{uuid4().hex[:12]}"
@@ -386,11 +555,14 @@ def build_snapshot(
             "timestamp_utc", datetime.now(timezone.utc).isoformat()
         ),
         "holdout_hash": report["holdout_hash"],
+        "outcome_digest": outcome_digest,
         "records_total": len(api_records),
         "truth_transactions": report["truth_transactions"],
         "match_rate": report["match_rate"],
         "precision": report["precision"],
         "recall": report["recall"],
+        "false_positive_decisions": report["false_positive_decisions"],
+        "false_positive_cost_inr": report["false_positive_cost_inr"],
         "matches": {
             "tier1": report["tier1_matched_truth_transactions"],
             "tier2": report["tier2_matched_truth_transactions"],
@@ -422,6 +594,18 @@ def build_snapshot(
             },
         },
         "elapsed_seconds": report["elapsed_seconds"],
+        "throughput_source_records_per_second": round(
+            len(api_records) / max(float(report["elapsed_seconds"]), 0.001),
+            3,
+        ),
+        "semantic_backend_counts": report.get("semantic_backend_counts", {}),
+        "answering_tier_counts": report.get("answering_tier_counts", {}),
+        "answering_model_counts": report.get("answering_model_counts", {}),
+        "adjudication_failures": report.get("adjudication_failures", 0),
+        "rate_limit_hits": report.get("rate_limit_hits", 0),
+        "rate_limit_retries": report.get("rate_limit_retries", 0),
+        "validation_retries": report.get("validation_retries", 0),
+        "reasoning_escalations": report.get("reasoning_escalations", 0),
     }
     snapshot = {
         "schema_version": SNAPSHOT_SCHEMA_VERSION,

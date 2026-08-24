@@ -10,6 +10,7 @@ from config.schema import CanonicalRecord, Source
 from data.generators.freeze_holdout import compute_holdout_hash
 from engine.normalize import load_holdout_records, load_records
 from engine.tier1_deterministic import match_tier1
+from eval.phase3_live import EXPECTED_HOLDOUT_HASH
 
 HOLDOUT_DIR = Path("data/holdout")
 
@@ -131,9 +132,36 @@ def test_tier1_refuses_ambiguous_duplicate_candidates():
     assert unmatched_ledger == [ledger_a, ledger_b]
 
 
+@pytest.mark.parametrize(
+    ("bank_amount", "ledger_amount", "reference"),
+    [
+        ("0.50", "-0.50", "pay_signed"),
+        ("0.00", "0.00", "pay_zero"),
+        ("100.00", "100.00", "   "),
+        ("100.00", "100.00", "\t"),
+    ],
+)
+def test_tier1_rejects_directionless_or_placeholder_evidence(
+    bank_amount, ledger_amount, reference
+):
+    bank = _record(
+        "bank_edge", Source.BANK, amount=bank_amount, reference=reference
+    )
+    ledger = _record(
+        "ledger_edge", Source.LEDGER, amount=ledger_amount, reference=reference
+    )
+
+    decisions, unmatched_bank, unmatched_ledger = match_tier1([bank], [ledger])
+
+    assert decisions == []
+    assert unmatched_bank == [bank]
+    assert unmatched_ledger == [ledger]
+
+
 def test_heldout_match_rate_and_zero_false_positives():
     stored_hash = (HOLDOUT_DIR / "HOLDOUT_HASH.txt").read_text().strip()
-    assert compute_holdout_hash(HOLDOUT_DIR) == stored_hash
+    assert stored_hash == EXPECTED_HOLDOUT_HASH
+    assert compute_holdout_hash(HOLDOUT_DIR) == EXPECTED_HOLDOUT_HASH
 
     bank_records, ledger_records = load_holdout_records(HOLDOUT_DIR)
     decisions, unmatched_bank, unmatched_ledger = match_tier1(

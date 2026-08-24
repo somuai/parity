@@ -77,7 +77,7 @@ def test_audit_store_persists_full_payload_and_queries_every_source_id(tmp_path)
         assert duplicate_entry["entry_type"] == "exception_record"
         assert duplicate_entry["reason_code"] == "duplicate_entry"
         assert duplicate_entry["estimated_amount_at_risk"] == "70.00"
-        assert duplicate_entry["signal_scores"] is None
+        assert duplicate_entry["signal_scores"] == exception.signal_scores
         assert "signal_scores_json" not in duplicate_entry
         assert duplicate_entry["payload"] == exception.model_dump(mode="json")
         store.verify_record_coverage({"bank_1", "ledger_1", "ledger_dup"})
@@ -114,6 +114,30 @@ def test_persist_all_rolls_back_the_whole_run_when_one_entry_is_invalid():
         with pytest.raises(ValueError, match="source record ID"):
             store.persist_all([_decision()], [invalid_exception])
         assert store.count() == 0
+
+
+def test_audit_coverage_is_scoped_to_one_run():
+    with AuditStore(":memory:") as store:
+        store.persist_all([_decision()], [], run_id="run-a")
+        store.persist_all(
+            [],
+            [
+                ExceptionRecord(
+                    record_ids=["bank_1"],
+                    reason_code=ExceptionType.ORPHAN,
+                    reason_detail="No ledger candidate exists for bank_1 in run-b.",
+                )
+            ],
+            run_id="run-b",
+        )
+
+        assert len(store.get_by_record_id("bank_1")) == 2
+        assert len(store.get_by_record_id("bank_1", run_id="run-b")) == 1
+        with pytest.raises(RuntimeError, match="ledger_1"):
+            store.verify_record_coverage(
+                {"bank_1", "ledger_1"},
+                run_id="run-b",
+            )
 
 
 def test_exception_book_separates_leakage_and_documents_amount_sources(tmp_path):

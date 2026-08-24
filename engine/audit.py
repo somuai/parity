@@ -22,6 +22,7 @@ from config.schema import ExceptionRecord, MatchDecision
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS audit_entries (
     audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
     entry_type TEXT NOT NULL CHECK (entry_type IN ('match_decision', 'exception_record')),
     tier INTEGER,
     confidence REAL,
@@ -68,6 +69,19 @@ class AuditStore:
         if self.database != ":memory:":
             self._connection.execute("PRAGMA journal_mode = WAL")
         self._connection.executescript(_SCHEMA)
+        columns = {
+            str(row["name"])
+            for row in self._connection.execute("PRAGMA table_info(audit_entries)")
+        }
+        if "run_id" not in columns:
+            self._connection.execute(
+                "ALTER TABLE audit_entries ADD COLUMN run_id TEXT NOT NULL "
+                "DEFAULT 'legacy'"
+            )
+        self._connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_entries_run_id "
+            "ON audit_entries(run_id)"
+        )
         self._connection.commit()
 
     def __enter__(self) -> "AuditStore":
@@ -92,22 +106,26 @@ class AuditStore:
             else:
                 self._connection.commit()
 
-    def persist_decision(self, decision: MatchDecision) -> int:
+    def persist_decision(self, decision: MatchDecision, *, run_id: str = "manual") -> int:
         """Persist one grounded match decision and return its audit ID."""
 
         with self._transaction() as connection:
-            return self._insert_decision(connection, decision)
+            return self._insert_decision(connection, decision, run_id)
 
-    def persist_exception(self, exception: ExceptionRecord) -> int:
+    def persist_exception(
+        self, exception: ExceptionRecord, *, run_id: str = "manual"
+    ) -> int:
         """Persist one specific exception and return its audit ID."""
 
         with self._transaction() as connection:
-            return self._insert_exception(connection, exception)
+            return self._insert_exception(connection, exception, run_id)
 
     def persist_all(
         self,
         decisions: Iterable[MatchDecision],
         exceptions: Iterable[ExceptionRecord],
+        *,
+        run_id: str = "manual",
     ) -> list[int]:
         """Atomically persist a reconciliation run's complete output."""
 
@@ -115,32 +133,36 @@ class AuditStore:
         exception_list = list(exceptions)
         with self._transaction() as connection:
             audit_ids = [
-                self._insert_decision(connection, decision)
+                self._insert_decision(connection, decision, run_id)
                 for decision in decision_list
             ]
             audit_ids.extend(
-                self._insert_exception(connection, exception)
+                self._insert_exception(connection, exception, run_id)
                 for exception in exception_list
             )
         return audit_ids
 
-    def get_by_record_id(self, record_id: str) -> list[dict[str, Any]]:
+    def get_by_record_id(
+        self, record_id: str, *, run_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return every audit outcome containing ``record_id`` in write order."""
 
         if not record_id.strip():
             raise ValueError("record_id must not be empty")
         with self._lock:
-            rows = self._connection.execute(
-                """
+            query = """
                 SELECT DISTINCT entries.*
                 FROM audit_entries AS entries
                 JOIN audit_entry_records AS records
                   ON records.audit_id = entries.audit_id
                 WHERE records.record_id = ?
-                ORDER BY entries.audit_id
-                """,
-                (record_id,),
-            ).fetchall()
+                """
+            parameters: tuple[str, ...] = (record_id,)
+            if run_id is not None:
+                query += " AND entries.run_id = ?"
+                parameters += (run_id,)
+            query += " ORDER BY entries.audit_id"
+            rows = self._connection.execute(query, parameters).fetchall()
         return [self._decode_row(row) for row in rows]
 
     def iter_entries(self) -> list[dict[str, Any]]:
@@ -159,22 +181,49 @@ class AuditStore:
             ).fetchone()
         return int(row["count"])
 
-    def audited_record_ids(self) -> set[str]:
+    def audited_record_ids(self, *, run_id: str | None = None) -> set[str]:
         with self._lock:
-            rows = self._connection.execute(
-                "SELECT DISTINCT record_id FROM audit_entry_records"
-            ).fetchall()
+            query = (
+                "SELECT DISTINCT records.record_id FROM audit_entry_records AS records "
+                "JOIN audit_entries AS entries ON entries.audit_id = records.audit_id"
+            )
+            parameters: tuple[str, ...] = ()
+            if run_id is not None:
+                query += " WHERE entries.run_id = ?"
+                parameters = (run_id,)
+            rows = self._connection.execute(query, parameters).fetchall()
         return {str(row["record_id"]) for row in rows}
 
-    def verify_record_coverage(self, expected_record_ids: Iterable[str]) -> None:
-        """Fail loudly if any expected source record lacks an audit outcome."""
+    def verify_record_coverage(
+        self,
+        expected_record_ids: Iterable[str],
+        *,
+        run_id: str = "manual",
+    ) -> None:
+        """Require exactly one audit outcome per expected record in one run."""
 
         expected = set(expected_record_ids)
-        missing = expected - self.audited_record_ids()
-        if missing:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT records.record_id, COUNT(*) AS outcome_count
+                FROM audit_entry_records AS records
+                JOIN audit_entries AS entries ON entries.audit_id = records.audit_id
+                WHERE entries.run_id = ?
+                GROUP BY records.record_id
+                """,
+                (run_id,),
+            ).fetchall()
+        counts = {str(row["record_id"]): int(row["outcome_count"]) for row in rows}
+        actual = set(counts)
+        missing = expected - actual
+        unexpected = actual - expected
+        repeated = {record_id: count for record_id, count in counts.items() if count != 1}
+        if missing or unexpected or repeated:
             raise RuntimeError(
-                "Audit trail is missing source record IDs: "
-                + ", ".join(sorted(missing))
+                f"Audit coverage mismatch for run_id={run_id!r}: "
+                f"missing={sorted(missing)}, unexpected={sorted(unexpected)}, "
+                f"non_unique={repeated}"
             )
 
     @staticmethod
@@ -191,6 +240,7 @@ class AuditStore:
         cls,
         connection: sqlite3.Connection,
         decision: MatchDecision,
+        run_id: str,
     ) -> int:
         cls._validate_record_ids(decision.record_ids)
         if not decision.rationale.strip():
@@ -199,11 +249,12 @@ class AuditStore:
         cursor = connection.execute(
             """
             INSERT INTO audit_entries (
-                entry_type, tier, confidence, rationale, signal_scores_json,
+                run_id, entry_type, tier, confidence, rationale, signal_scores_json,
                 payload_json, created_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                run_id,
                 "match_decision",
                 decision.tier,
                 decision.confidence,
@@ -222,6 +273,7 @@ class AuditStore:
         cls,
         connection: sqlite3.Connection,
         exception: ExceptionRecord,
+        run_id: str,
     ) -> int:
         cls._validate_record_ids(exception.record_ids)
         if not exception.reason_detail.strip():
@@ -230,12 +282,17 @@ class AuditStore:
         cursor = connection.execute(
             """
             INSERT INTO audit_entries (
-                entry_type, reason_code, reason_detail,
-                estimated_amount_at_risk, payload_json, created_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                run_id, entry_type, tier, confidence, signal_scores_json,
+                reason_code, reason_detail, estimated_amount_at_risk,
+                payload_json, created_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                run_id,
                 "exception_record",
+                exception.tier,
+                exception.confidence,
+                _json_dumps(payload["signal_scores"]),
                 exception.reason_code.value,
                 exception.reason_detail,
                 payload["estimated_amount_at_risk"],

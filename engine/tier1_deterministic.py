@@ -31,6 +31,12 @@ def _validate_sources(
 def _is_candidate(bank: CanonicalRecord, ledger: CanonicalRecord) -> bool:
     if not bank.reference or bank.reference != ledger.reference:
         return False
+    # Signed amounts represent cash direction. A debit must never close a
+    # credit merely because both values happen to sit inside the ₹1 tolerance.
+    if bank.amount == 0 or ledger.amount == 0:
+        return False
+    if (bank.amount > 0) != (ledger.amount > 0):
+        return False
     if abs(bank.amount - ledger.amount) > AMOUNT_TOLERANCE:
         return False
     bank_lag_days = (bank.txn_date - ledger.txn_date).days

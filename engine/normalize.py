@@ -28,9 +28,9 @@ def load_records(path: Path, source: Source) -> list[CanonicalRecord]:
                         source=source,
                         amount=row["amount"],
                         txn_date=row["txn_date"],
-                        reference=row.get("reference") or None,
+                        reference=(row.get("reference") or "").strip() or None,
                         description=row.get("description", ""),
-                        counterparty=row.get("counterparty") or None,
+                        counterparty=(row.get("counterparty") or "").strip() or None,
                         fees_deducted=row.get("fees_deducted") or None,
                     )
                 )

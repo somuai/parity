@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Source(str, Enum):
@@ -51,6 +51,22 @@ class CanonicalRecord(BaseModel):
     _ground_truth_match_id: Optional[str] = None
     _ground_truth_exception_type: Optional[ExceptionType] = None
 
+    @field_validator("record_id")
+    @classmethod
+    def _nonempty_record_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("record_id must not be blank")
+        return normalized
+
+    @field_validator("reference", "counterparty", mode="before")
+    @classmethod
+    def _normalize_optional_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        return normalized or None
+
 
 class MatchDecision(BaseModel):
     """Output of Tier 1 or Tier 2 for one candidate pair/group."""
@@ -68,3 +84,9 @@ class ExceptionRecord(BaseModel):
     reason_detail: str                 # human-readable, specific
     estimated_amount_at_risk: Optional[Decimal] = None  # only set if this is real leakage,
                                                           # not just a timing/formatting gap
+    tier: int = 2
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    signal_scores: dict[str, float] = Field(default_factory=dict)
+    semantic_backend: Optional[str] = None
+    adjudicator_tier: Optional[str] = None
+    adjudicator_model: Optional[str] = None

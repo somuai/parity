@@ -55,7 +55,8 @@ def fuse_confidence(
     *,
     amount_delta: float,
     timing_delta: float,
-    semantic_similarity: float,
+    semantic_similarity: float | None,
+    semantic_reliability: float = 1.0,
     adjudicator_verdict: Literal["yes", "no", "uncertain"],
     adjudicator_confidence: float,
 ) -> ConfidenceResult:
@@ -69,7 +70,12 @@ def fuse_confidence(
     """
     amount = 1.0 - _unit_interval("amount_delta", amount_delta)
     timing = 1.0 - _unit_interval("timing_delta", timing_delta)
-    semantic = _unit_interval("semantic_similarity", semantic_similarity)
+    reliability = _unit_interval("semantic_reliability", semantic_reliability)
+    semantic = (
+        0.0
+        if semantic_similarity is None
+        else _unit_interval("semantic_similarity", semantic_similarity) * reliability
+    )
     model_confidence = _unit_interval(
         "adjudicator_confidence", adjudicator_confidence
     )
@@ -88,6 +94,7 @@ def fuse_confidence(
         "timing": timing,
         "semantic": semantic,
         "adjudicator": adjudicator,
+        "semantic_reliability": reliability,
     }
     score = round(
         sum(components[name] * weight for name, weight in WEIGHTS.items()),
