@@ -19,7 +19,7 @@ Full architecture, data model, and evaluation methodology: see
 | 1 — Data layer | Truth source + bank/ledger generators working; one-to-many/many-to-one grouping still approximated (TODOs in `data/generators/`) | `01_data_engineer_agent.md` |
 | 2 — Tier 1 deterministic matcher | Complete — 219/300 deterministic matches, zero false positives | `02_tier1_matcher_agent.md` |
 | 3 — Tier 2 reasoning matcher | Complete — 97.33% cumulative live match rate, 100% precision | `03_tier2_reasoning_agent.md` |
-| 4 — Audit trail + hosted app + observability | Implemented locally; Render dashboard connection pending | `04_audit_observability_agent.md` |
+| 4 — Audit trail + hosted app + observability | Complete — live FastAPI + Blade app on Render | `04_audit_observability_agent.md` |
 | 5 — Hardening review | Not started | `05_hardening_review_agent.md` |
 | 6 — Fixes, docs & repro | Not started | `06_docs_pitch_agent.md` |
 
@@ -45,10 +45,9 @@ service after 15 minutes with no traffic and takes 30-60 seconds to wake on
 the next visit. That's expected, not a bug — worth saying in the pitch
 video too, so nobody assumes the link is broken.
 
-**Live URL:** pending the one-time GitHub repository and Render Blueprint
-connection. The deployment definition is ready in `render.yaml`; this line
-must be replaced with the verified `onrender.com` URL after the dashboard
-deploy succeeds.
+**Live URL:** [https://parity-1go2.onrender.com](https://parity-1go2.onrender.com)
+([health check](https://parity-1go2.onrender.com/api/health)). The first
+deployment was verified with a `200 {"status":"ok"}` response.
 
 ## Why Groq, not Anthropic, for the Tier 2 adjudicator
 
@@ -77,7 +76,7 @@ make run-frontend            # Vite dev server on :5173, proxies /api to it
 config/schema.py              canonical record schema, shared across all sources
 clients/razorpay_client.py    Settlement Recon API wrapper (test mode)
 data/generators/              synthetic bank + ledger generation, shared truth source
-data/holdout/                 generated data lands here (gitignored except .gitkeep)
+data/holdout/                 frozen, versioned evaluation data and hash
 engine/                       Tier 1 + Tier 2 matching logic (Phase 2, 3)
 eval/                         metrics harness + exception book (Phase 4)
 observability/                logging, cost/rate tracking (Phase 4)
