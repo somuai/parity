@@ -17,7 +17,7 @@ services:
     name: parity
     runtime: python
     plan: free
-    buildCommand: "pip install -r requirements.txt && cd frontend && npm install && npm run build"
+    buildCommand: "pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt && cd frontend && npm install && npm run build"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: RAZORPAY_TEST_KEY_ID

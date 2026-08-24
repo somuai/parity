@@ -1,6 +1,7 @@
-.PHONY: setup confirm-api gen-data eval-data demo test
+.PHONY: setup confirm-api gen-data eval-data eval-tier2-live demo test
 
 setup:
+	pip install torch --index-url https://download.pytorch.org/whl/cpu --break-system-packages
 	pip install -r requirements.txt --break-system-packages
 
 confirm-api:
@@ -19,6 +20,10 @@ demo: gen-data
 
 test:
 	pytest tests/ -v
+
+# Fixture-free Phase 3 gate: frozen hash + real MiniLM + live Groq.
+eval-tier2-live:
+	python3 -m eval.phase3_live
 
 # Local run of the hosted app (Phase 4+). Two processes: backend on :8000,
 # frontend dev server on :5173 proxying /api to it. For production, the
