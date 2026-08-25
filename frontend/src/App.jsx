@@ -585,13 +585,13 @@ function RiskSplit({ exceptions }) {
             backgroundColor="feedback.background.negative.subtle"
           >
             <Badge color="negative" size="small">
-              Real leakage
+              Leakage requiring action
             </Badge>
             <Display size="small" marginTop="spacing.4" color="feedback.text.negative.intense">
               {currencyFormatter.format(Number(leakage.total_amount_at_risk_inr ?? 0))}
             </Display>
             <Text marginTop="spacing.2" size="small">
-              {`${numberFormatter.format(leakage.count ?? 0)} flagged entries`}
+              {`${numberFormatter.format(leakage.count ?? 0)} evidence-supported entries`}
             </Text>
           </Box>
 
@@ -602,13 +602,13 @@ function RiskSplit({ exceptions }) {
             backgroundColor="feedback.background.notice.subtle"
           >
             <Badge color="notice" size="small">
-              Human review
+              Low-risk, needs review
             </Badge>
             <Display size="small" marginTop="spacing.4" color="feedback.text.notice.intense">
               {currencyFormatter.format(Number(nonLeakage.total_amount_at_risk_inr ?? 0))}
             </Display>
             <Text marginTop="spacing.2" size="small">
-              {`${numberFormatter.format(nonLeakage.count ?? 0)} non-leakage entries`}
+              {`${numberFormatter.format(nonLeakage.count ?? 0)} entries; not claimed as leakage`}
             </Text>
           </Box>
         </Box>
@@ -626,6 +626,9 @@ function ReproducibilityCheck({ result, isRunning, error, onRerun }) {
             <Heading size="medium">Reproducibility check</Heading>
             <Text marginTop="spacing.2" size="small" color="surface.text.gray.muted">
               Replay the frozen batch twice and compare complete per-record outcome digests.
+            </Text>
+            <Text marginTop="spacing.1" size="xsmall" color="surface.text.gray.muted">
+              Same frozen data, same result — the numbers in this report are not staged.
             </Text>
           </Box>
           <Button onClick={onRerun} isLoading={isRunning} isDisabled={isRunning}>
@@ -858,17 +861,19 @@ export default function App() {
               Frozen held-out audit
             </Badge>
             <Display as="h1" size="medium" marginTop="spacing.4">
-              Parity
+              Parity — AI reconciliation investigator for Razorpay settlements
             </Display>
           </Box>
         </Box>
         <Text marginTop="spacing.4" color="surface.text.gray.subtle">
-          A restrained financial-reconciliation investigator that finds evidence, enforces
-          budgets, and flags exceptions without acting on merchant funds.
+          Feed it a settlement report, bank statement, and ledger. It finds where the money
+          does not add up, explains why, and refuses to guess on the rest.
         </Text>
         <Box display="flex" flexWrap="wrap" gap="spacing.3" marginTop="spacing.5">
+          <Badge color="positive">{`Match rate ${asPercent(summary.match_rate)}`}</Badge>
           <Badge color="positive">{`Precision ${asPercent(summary.precision)}`}</Badge>
           <Badge color="information">{`Recall ${asPercent(summary.recall)}`}</Badge>
+          <Badge color="negative">{`${currencyFormatter.format(Number(summary.exceptions?.leakage?.total_amount_at_risk_inr ?? 0))} leakage flagged`}</Badge>
           <Badge color="neutral">{summary.run_id ?? "Run ID unavailable"}</Badge>
         </Box>
       </Box>
@@ -893,7 +898,7 @@ export default function App() {
       <Box as="section" marginTop="spacing.9">
         <SectionHeading
           title="Confidence scatter"
-          description="Every record is selectable. Blade’s Calm, Joyful, Caution, and Regret feedback states map directly to reconciliation confidence."
+          description={`${numberFormatter.format(records.length)} source records are selectable; headline metrics refer to 300 truth transactions. Blade’s Calm, Joyful, Caution, and Regret states map to confidence.`}
         />
         <ConfidenceScatter records={records} selectedId={selectedId} onSelect={setSelectedId} />
       </Box>
