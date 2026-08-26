@@ -9,10 +9,11 @@ import {
   CardBody,
   Display,
   Heading,
-  PopoverInteractiveWrapper,
   ProgressBar,
   Spinner,
   Text,
+  Tooltip,
+  TooltipInteractiveWrapper,
 } from "@razorpay/blade/components";
 
 const numberFormatter = new Intl.NumberFormat("en-IN", {
@@ -318,22 +319,26 @@ function ConfidenceScatter({ records, selectedId, onSelect }) {
             const state = emotionalState(record);
             const isSelected = record.id === selectedId;
             return (
-              <PopoverInteractiveWrapper
+              <Tooltip
                 key={record.id}
-                accessibilityLabel={`Explain ${record.id}: ${state}, confidence ${asPercent(
-                  record.confidence,
-                )}`}
-                onClick={() => onSelect(record.id)}
-                width="spacing.4"
-                height="spacing.4"
-                padding="spacing.0"
-                borderRadius="round"
-                backgroundColor={stateStyles[state].dot}
-                borderWidth={isSelected ? "thick" : "none"}
-                borderColor="interactive.border.primary.default"
-                cursor="pointer"
-                testID={`record-dot-${record.id}`}
-              />
+                content={`${record.id}: ${state}, confidence ${asPercent(record.confidence)}`}
+              >
+                <TooltipInteractiveWrapper
+                  accessibilityLabel={`Explain ${record.id}: ${state}, confidence ${asPercent(
+                    record.confidence,
+                  )}`}
+                  onClick={() => onSelect(record.id)}
+                  width="spacing.5"
+                  height="spacing.5"
+                  padding="spacing.0"
+                  borderRadius="round"
+                  backgroundColor={stateStyles[state].dot}
+                  borderWidth={isSelected ? "thick" : "none"}
+                  borderColor="interactive.border.primary.default"
+                  cursor="pointer"
+                  testID={`record-dot-${record.id}`}
+                />
+              </Tooltip>
             );
           })}
         </Box>
@@ -556,7 +561,7 @@ function BudgetMeter({ budget }) {
               min={0}
               max={Math.max(limit, 1)}
               color={budgetColor(used, limit)}
-              showPercentage
+              showPercentage={false}
               size="medium"
             />
           ))}
@@ -732,7 +737,13 @@ export default function App() {
           : [];
       setSummary(summaryPayload);
       setRecords(nextRecords);
-      setSelectedId((current) => current ?? nextRecords[0]?.id ?? null);
+      const defaultException = nextRecords.find((record) => {
+        const band = String(record?.confidence_band ?? "").toLowerCase();
+        const tier = String(record?.tier ?? "").toLowerCase();
+        const status = String(record?.status ?? "").toLowerCase();
+        return band === "regret" || band === "low" || tier === "exception" || status.includes("exception");
+      });
+      setSelectedId((current) => current ?? defaultException?.id ?? nextRecords[0]?.id ?? null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Unable to load dashboard data.");
     } finally {
@@ -876,6 +887,10 @@ export default function App() {
           <Badge color="negative">{`${currencyFormatter.format(Number(summary.exceptions?.leakage?.total_amount_at_risk_inr ?? 0))} leakage flagged`}</Badge>
           <Badge color="neutral">{summary.run_id ?? "Run ID unavailable"}</Badge>
         </Box>
+        <Text marginTop="spacing.3" size="small" color="surface.text.gray.subtle">
+          Match rate fell from 97.33% to 90.67% after Phase 5 hardening — the evaluator was
+          made stricter, not the numbers easier.
+        </Text>
       </Box>
 
       <Box marginTop="spacing.7">
