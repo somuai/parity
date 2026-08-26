@@ -872,7 +872,7 @@ export default function App() {
               Frozen held-out audit
             </Badge>
             <Display as="h1" size="medium" marginTop="spacing.4">
-              Parity — AI reconciliation investigator for Razorpay settlements
+              Parity
             </Display>
           </Box>
         </Box>
