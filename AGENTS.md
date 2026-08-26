@@ -32,9 +32,8 @@ the final pitch must be reproducible by re-running the repo, not asserted.
 5. **Verb discipline in all docs/pitch copy: Parity *finds* and *flags*,
    never *recovers* or *resolves on the merchant's behalf*.** It's an
    investigator, not an actor — see PRD Section 1 (non-goals).
-6. **Stay inside your phase's file scope** (see each phase prompt in
-   `docs/codex_prompts/`). Don't fix something in a later phase's files
-   because it's convenient — flag it in your report instead.
+6. **Stay inside the current task's file scope.** Don't fix unrelated files
+   because it's convenient — flag them instead.
 7. **Respect the budget ceilings in `.env`** (`LLM_CALL_BUDGET_PER_RUN`,
    `TOKEN_BUDGET_PER_RUN`). Any code that calls an LLM must check remaining
    budget first and fail loudly, not silently truncate, if exceeded.
@@ -65,8 +64,3 @@ generated recall layer, not a source of truth. Good news: the five rules
 below already live in this file (rules 1-8 above), which is the actually-
 correct place for them. Nothing to do differently here — just don't go
 looking for a "seed memory" step, because it isn't a real one.
-
-## Phase index
-
-See `docs/codex_prompts/INDEX.md` for the full phase table, recommended
-approval policy per phase, and which phases use subagents.
