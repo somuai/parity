@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Accordion,
+  AccordionItem,
+  AccordionItemBody,
+  AccordionItemHeader,
   Alert,
   Avatar,
   Badge,
@@ -385,6 +389,51 @@ function rawSignalValue(value) {
   return String(value);
 }
 
+function rationaleAmount(rawRationale, field) {
+  const match = String(rawRationale ?? "").match(new RegExp(`${field}=₹([0-9.]+)`, "i"));
+  return match ? Number(match[1]) : null;
+}
+
+function humanRationale(record) {
+  const scores = record?.signal_scores ?? {};
+  const rawRationale = String(record?.rationale ?? "");
+  const absoluteDelta = rationaleAmount(rawRationale, "absolute_amount_delta");
+  const tolerance = rationaleAmount(rawRationale, "tolerance");
+  const referenceSimilarity = clamp(scores.reference_similarity);
+  const timingFit = Number.isFinite(Number(scores.timing_delta))
+    ? clamp(1 - Number(scores.timing_delta))
+    : null;
+  const partialRefund = Boolean(scores.partial_refund_plausible);
+  const isException =
+    rawRationale.includes("route=exception") ||
+    String(record?.status ?? "").toLowerCase().includes("exception") ||
+    emotionalState(record) === "Regret";
+
+  const amountSummary =
+    absoluteDelta !== null && tolerance !== null
+      ? `Python calculated a ${currencyFormatter.format(absoluteDelta)} difference against a ${currencyFormatter.format(tolerance)} tolerance.`
+      : "The amount evidence was evaluated against the configured settlement tolerance.";
+  const supportingEvidence = [
+    referenceSimilarity !== null ? `reference similarity is ${numberFormatter.format(referenceSimilarity)}` : null,
+    timingFit !== null ? `timing fit is ${asPercent(timingFit)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+
+  if (partialRefund) {
+    const refundRatio = clamp(scores.refund_ratio);
+    return `${amountSummary} A partial-refund pattern was detected${
+      refundRatio !== null ? ` at a ${numberFormatter.format(refundRatio)} ratio` : ""
+    }; ${supportingEvidence || "the linked record evidence"} supports the review decision.`;
+  }
+
+  if (isException) {
+    return `${amountSummary} ${supportingEvidence ? `Although ${supportingEvidence}, ` : ""}the deterministic amount check has no sufficient explanation for the mismatch, so this record was flagged for review.`;
+  }
+
+  return `${amountSummary} ${supportingEvidence ? `The ${supportingEvidence} supports this reconciliation,` : "The available signals support this reconciliation,"} so Parity accepted it with the displayed confidence.`;
+}
+
 function RecordDrillDown({ record, loading, error }) {
   if (loading) {
     return (
@@ -422,6 +471,7 @@ function RecordDrillDown({ record, loading, error }) {
 
   const state = emotionalState(record);
   const rawSignals = Object.entries(record.signal_scores ?? {});
+  const verdictTitle = state === "Regret" ? "Why this was flagged" : "Why this was accepted";
 
   return (
     <Card variant="secondary">
@@ -471,6 +521,30 @@ function RecordDrillDown({ record, loading, error }) {
           </Box>
         </Box>
 
+        <Box
+          marginTop="spacing.7"
+          padding="spacing.5"
+          borderRadius="medium"
+          backgroundColor={
+            state === "Regret"
+              ? "feedback.background.negative.subtle"
+              : "feedback.background.information.subtle"
+          }
+        >
+          <Text
+            size="small"
+            weight="semibold"
+            color={
+              state === "Regret"
+                ? "feedback.text.negative.intense"
+                : "feedback.text.information.intense"
+            }
+          >
+            {verdictTitle}
+          </Text>
+          <Text marginTop="spacing.3">{humanRationale(record)}</Text>
+        </Box>
+
         <Box marginTop="spacing.7" display="flex" flexDirection="column" gap="spacing.5">
           {signalBars(record).map(([label, value]) =>
             value === null ? (
@@ -495,41 +569,41 @@ function RecordDrillDown({ record, loading, error }) {
           )}
         </Box>
 
-        <Box
-          marginTop="spacing.7"
-          padding="spacing.5"
-          borderRadius="medium"
-          backgroundColor="feedback.background.information.subtle"
-        >
-          <Text size="small" weight="semibold" color="feedback.text.information.intense">
-            Grounded rationale
-          </Text>
-          <Text marginTop="spacing.3">{record.rationale || "No rationale returned."}</Text>
-        </Box>
-
         <Box marginTop="spacing.7">
-          <Text size="small" weight="semibold">
-            Raw grounded signals
-          </Text>
-          {rawSignals.length ? (
-            <Box display="flex" flexWrap="wrap" gap="spacing.3" marginTop="spacing.3">
-              {rawSignals.map(([key, value]) => (
-                <Box
-                  key={key}
-                  paddingX="spacing.3"
-                  paddingY="spacing.2"
-                  borderRadius="small"
-                  backgroundColor="feedback.background.neutral.subtle"
-                >
-                  <Text size="xsmall">{`${key}=${rawSignalValue(value)}`}</Text>
+          <Accordion variant="transparent" size="medium">
+            <AccordionItem>
+              <AccordionItemHeader title="Full signal detail" />
+              <AccordionItemBody>
+                <Text size="small" color="surface.text.gray.muted">
+                  Complete audit payload for reviewers who need the underlying evidence.
+                </Text>
+                {rawSignals.length ? (
+                  <Box display="flex" flexWrap="wrap" gap="spacing.3" marginTop="spacing.3">
+                    {rawSignals.map(([key, value]) => (
+                      <Box
+                        key={key}
+                        paddingX="spacing.3"
+                        paddingY="spacing.2"
+                        borderRadius="small"
+                        backgroundColor="feedback.background.neutral.subtle"
+                      >
+                        <Text size="xsmall">{`${key}=${rawSignalValue(value)}`}</Text>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  <Text marginTop="spacing.3" size="small" color="surface.text.gray.muted">
+                    No raw signal payload was supplied for this record.
+                  </Text>
+                )}
+                <Box marginTop="spacing.4">
+                  <Text size="xsmall" color="surface.text.gray.muted">
+                    {record.rationale || "No raw rationale returned."}
+                  </Text>
                 </Box>
-              ))}
-            </Box>
-          ) : (
-            <Text marginTop="spacing.3" size="small" color="surface.text.gray.muted">
-              No raw signal payload was supplied for this record.
-            </Text>
-          )}
+              </AccordionItemBody>
+            </AccordionItem>
+          </Accordion>
         </Box>
       </CardBody>
     </Card>
